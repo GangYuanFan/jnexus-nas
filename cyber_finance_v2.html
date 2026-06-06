@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberClaw Finance | Pro Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #05050a;
+            --card-bg: #11111f;
+            --accent-color: #00f2ff;
+            --text-color: #e0e0ff;
+            --up-color: #ff3e3e; 
+            --down-color: #00ff88; 
+            --border-glow: 0 0 10px rgba(0, 242, 255, 0.3);
+            --secondary-text: #a0a0c0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: var(--accent-color);
+            text-shadow: 0 0 20px var(--accent-color);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .status-bar {
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+            opacity: 0.7;
+            text-align: center;
+        }
+
+        .filter-bar {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            background: var(--card-bg);
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: var(--text-color);
+            flex: 1;
+            min-width: 250px;
+            outline: none;
+            font-size: 1rem;
+        }
+
+        .filter-box {
+            background: var(--card-bg);
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 10px;
+            color: var(--text-color);
+            cursor: pointer;
+            outline: none;
+        }
+
+        .category-section {
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 40px;
+        }
+
+        .category-title {
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 5px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 2px 10px rgba(0, 242, 255, 0.2);
+        }
+
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .stock-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            box-shadow: var(--border-glow);
+            transition: all 0.2s;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.5);
+        }
+
+        .stock-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-color);
+            opacity: 0.5;
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .stock-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        .stock-symbol {
+            font-size: 0.8rem;
+            color: var(--secondary-text);
+            font-family: monospace;
+            background: rgba(0, 242, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .stock-price-area {
+            margin: 15px 0;
+        }
+
+        .stock-price {
+            font-size: 2.4rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            line-height: 1;
+        }
+
+        .stock-change {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .up { color: var(--up-color); }
+        .down { color: var(--down-color); }
+
+        .update-time {
+            font-size: 0.7rem;
+            text-align: right;
+            opacity: 0.4;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--secondary-text);
+            font-style: italic;
+        }
+
+        .discovery-hint {
+            text-align: center;
+            width: 100%;
+            max-width: 1200px;
+            margin-top: -20px;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            opacity: 0.8;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        #chart-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+
+        #chart-container {
+            background: var(--card-bg);
+            border: 2px solid var(--accent-color);
+            border-radius: 20px;
+            padding: 25px;
+            width: 90%;
+            max-width: 1100px;
+            position: relative;
+            box-shadow: 0 0 40px var(--accent-color);
+        }
+
+        #chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #chart-title {
+            font-size: 1.8rem;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        #close-chart {
+            background: none;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            padding: 8px 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        #close-chart:hover {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        #chart-canvas {
+            width: 100%;
+            height: 600px;
+        }
+
+        .loading {
+            font-style: italic;
+            color: var(--accent-color);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>CyberClaw Finance Pro</h1>
+    <div class="status-bar">System Status: <span id="connection" class="loading">Syncing with Global Markets...</span></div>
+
+    <div class="filter-bar">
+        <input type="text" id="search-input" class="search-box" placeholder="Search ticker or name (e.g. 0050, 2395 or 台積電)...">
+        <select id="category-filter" class="filter-box">
+            <option value="all">All Categories</option>
+            <!-- Categories injected here -->
+        </select>
+    </div>
+
+    <div id="discovery-hint" class="discovery-hint">✨ Showing Featured Stocks. Search above to discover more...</div>
+
+    <div id="main-container">
+        <!-- Category sections injected here -->
+    </div>
+
+    <div id="chart-modal">
+        <div id="chart-container">
+            <div id="chart-header">
+                <div id="chart-title">Loading Chart...</div>
+                <button id="close-chart">Close ✕</button>
+            </div>
+            <div id="chart-canvas"></div>
+        </div>
+    </div>
+
+    <script>
+        let myChart = null;
+        let allStocksData = {};
+        let searchTimeout = null;
+
+        async function updateStocks() {
+            try {
+                const response = await fetch('/api/stocks');
+                const data = await response.json();
+                
+                // Merge featured stocks into allStocksData while preserving the "Discovered" category
+                const discovered = allStocksData["Discovered"] || {};
+                allStocksData = { ...data, "Discovered": discovered };
+                
+                const connStatus = document.getElementById('connection');
+                const categoryFilter = document.getElementById('category-filter');
+                
+                connStatus.textContent = 'Live Connection Established';
+                connStatus.classList.remove('loading');
+                connStatus.style.color = 'var(--up-color)';
+
+                const currentFilter = categoryFilter.value;
+                categoryFilter.innerHTML = '<option value="all">All Categories</option>';
+                for (const cat of Object.keys(data)) {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    categoryFilter.appendChild(option);
+                }
+                // Add "Discovered" to the filter if it exists
+                if (Object.keys(discovered).length > 0) {
+                    const option = document.createElement('option');
+                    option.value = 'Discovered';
+                    option.textContent = 'Discovered';
+                    categoryFilter.appendChild(option);
+                }
+                categoryFilter.value = currentFilter;
+
+                renderDashboard();
+            } catch (e) {
+                console.error('Fetch error:', e);
+                document.getElementById('connection').textContent = 'Connection Lost. Retrying...';
+                document.getElementById('connection').classList.add('loading');
+            }
+        }
+
+        async function handleSearch(term) {
+            const searchTerm = term.toLowerCase().trim();
+            if (!searchTerm) {
+                renderDashboard();
+                return;
+            }
+
+            // First, try to find in local cache
+            let found = false;
+            for (const [cat, stocks] of Object.entries(allStocksData)) {
+                for (const [name, info] of Object.entries(stocks)) {
+                    if (name.toLowerCase().includes(searchTerm) || info.symbol.toLowerCase().includes(searchTerm)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+
+            if (found) {
+                renderDashboard();
+            } else {
+                // NOT FOUND locally -> Try the Dynamic API
+                const mainContainer = document.getElementById('main-container');
+                mainContainer.innerHTML = `<div class="empty-state">Searching global markets for "${searchTerm}"...</div>`;
+                
+                try {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`);
+                    if (response.status === 200) {
+                        const newData = await response.json();
+                        if (Object.keys(newData).length > 0) {
+                            const [name, info] = Object.entries(newData)[0];
+                            
+                            // Determine the correct category for the discovered stock
+                            let targetCat = "Discovered";
+                            if (info.symbol.endsWith('.TW')) {
+                                targetCat = "台股";
+                            } else if (info.symbol.length <= 5 && !info.symbol.includes('.')) {
+                                targetCat = "美股";
+                            }
+
+                            if (!allStocksData[targetCat]) {
+                                allStocksData[targetCat] = {};
+                            }
+                            allStocksData[targetCat][name] = info;
+                            renderDashboard();
+                        } else {
+                            mainContainer.innerHTML = `<div class="empty-state">No stock found for "${searchTerm}".</div>`;
+                        }
+                    } else {
+                        mainContainer.innerHTML = `<div class="empty-state">Stock "${searchTerm}" not found in global markets.</div>`;
+                    }
+                } catch (e) {
+                    mainContainer.innerHTML = `<div class="empty-state">Error searching for "${searchTerm}". Please try again.</div>`;
+                }
+            }
+        }
+
+        function renderDashboard() {
+            const mainContainer = document.getElementById('main-container');
+            const hint = document.getElementById('discovery-hint');
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const selectedCat = document.getElementById('category-filter').value;
+            
+            mainContainer.innerHTML = '';
+            hint.style.display = searchTerm === '' ? 'block' : 'none';
+
+            for (const [cat, stocks] of Object.entries(allStocksData)) {
+                if (selectedCat !== 'all' && selectedCat !== cat) continue;
+
+                let stockEntries = Object.entries(stocks);
+                
+                if (searchTerm === '') {
+                    stockEntries = stockEntries.slice(0, 6);
+                } else {
+                    stockEntries = stockEntries.filter(([name, info]) => {
+                        return name.toLowerCase().includes(searchTerm) || info.symbol.toLowerCase().includes(searchTerm);
+                    });
+                }
+
+                if (stockEntries.length === 0) continue;
+
+                const section = document.createElement('div');
+                section.className = 'category-section';
+                section.innerHTML = `<div class="category-title">${cat} ${searchTerm === '' ? '(Featured)' : ''}</div><div class="stock-grid" id="grid-${cat}"></div>`;
+                mainContainer.appendChild(section);
+
+                const grid = section.querySelector('.stock-grid');
+                
+                for (const [name, info] of stockEntries) {
+                    const card = document.createElement('div');
+                    card.className = 'stock-card';
+                    card.onclick = () => showChart(info.symbol, name);
+
+                    const isUp = info.change >= 0;
+                    const changeClass = isUp ? 'up' : 'down';
+                    const arrow = isUp ? '▲' : '▼';
+
+                    card.innerHTML = `
+                        <div class="stock-header">
+                            <div class="stock-name">${name}</div>
+                            <div class="stock-symbol">${info.symbol}</div>
+                        </div>
+                        <div class="stock-price-area">
+                            <div class="stock-price">
+                                ${info.currency} ${info.price.toLocaleString()}
+                            </div>
+                            <div class="stock-change ${changeClass}">
+                                ${arrow} ${Math.abs(info.change).toLocaleString()} (${info.pct_change}%)
+                            </div>
+                        </div>
+                        <div class="update-time">Last Update: ${info.last_updated}</div>
+                    `;
+                    grid.appendChild(card);
+                }
+            }
+            
+            if (mainContainer.innerHTML === '') {
+                mainContainer.innerHTML = `<div class="empty-state">No stocks found matching "${searchTerm}". Try another keyword!</div>`;
+            }
+        }
+
+        async function showChart(symbol, name) {
+            const modal = document.getElementById('chart-modal');
+            const title = document.getElementById('chart-title');
+            const canvas = document.getElementById('chart-canvas');
+            
+            modal.style.display = 'flex';
+            title.textContent = `${name} (${symbol}) - History Analysis`;
+            
+            try {
+                const response = await fetch(`/api/history/${symbol}`);
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+
+                if (myChart) {
+                    myChart.dispose();
+                }
+
+                myChart = echarts.init(canvas);
+
+                const dates = data.map(item => new Date(item.time * 1000).toLocaleDateString());
+                const values = data.map(item => [item.open, item.close, item.low, item.high]);
+
+                const option = {
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'cross' },
+                        backgroundColor: 'rgba(22, 22, 37, 0.9)',
+                        borderColor: '#00f2ff',
+                        textStyle: { color: '#e0e0ff' }
+                    },
+                    grid: {
+                        left: '5%',
+                        right: '5%',
+                        bottom: '15%'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: dates,
+                        axisLine: { lineStyle: { color: '#444' } },
+                        axisLabel: { color: '#aaa' }
+                    },
+                    yAxis: {
+                        scale: true,
+                        axisLine: { lineStyle: { color: '#444' } },
+                        axisLabel: { color: '#aaa' },
+                        splitLine: { lineStyle: { color: '#2b2b40' } }
+                    },
+                    dataZoom: [
+                        { type: 'inside', start: 80, end: 100 },
+                        { type: 'slider', start: 80, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#aaa' }, borderColor: '#444', fillerColor: 'rgba(0, 242, 255, 0.1)' }
+                    ],
+                    series: [{
+                        type: 'candlestick',
+                        data: values,
+                        itemStyle: {
+                            color: '#ff3e3e',
+                            color0: '#00ff88',
+                            borderColor: '#ff3e3e',
+                            borderColor0: '#00ff88'
+                        }
+                    }]
+                };
+
+                myChart.setOption(option);
+                window.addEventListener('resize', () => myChart.resize());
+
+            } catch (e) {
+                title.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        document.getElementById('close-chart').onclick = () => {
+            document.getElementById('chart-modal').style.display = 'none';
+        };
+
+        document.getElementById('search-input').oninput = (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => handleSearch(e.target.value), 300);
+        };
+        document.getElementById('category-filter').onchange = renderDashboard;
+
+        setInterval(updateStocks, 5000);
+        updateStocks();
+    </script>
+</body>
+</html>
