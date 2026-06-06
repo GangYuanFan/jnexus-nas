@@ -318,9 +318,21 @@
                 const response = await fetch('/api/stocks');
                 const data = await response.json();
                 
-                // Merge featured stocks into allStocksData while preserving the "Discovered" category
-                const discovered = allStocksData["Discovered"] || {};
-                allStocksData = { ...data, "Discovered": discovered };
+                // Merge featured stocks into allStocksData while preserving dynamic additions in each category
+                for (const [cat, stocks] of Object.entries(data)) {
+                    if (!allStocksData[cat]) allStocksData[cat] = {};
+                    
+                    // Start with the new featured stock data (to get latest prices)
+                    const mergedStocks = { ...stocks };
+                    
+                    // Preserve stocks that were added dynamically and are not part of the featured list
+                    for (const [name, info] of Object.entries(allStocksData[cat])) {
+                        if (!stocks[name]) {
+                            mergedStocks[name] = info;
+                        }
+                    }
+                    allStocksData[cat] = mergedStocks;
+                }
                 
                 const connStatus = document.getElementById('connection');
                 const categoryFilter = document.getElementById('category-filter');
@@ -338,7 +350,7 @@
                     categoryFilter.appendChild(option);
                 }
                 // Add "Discovered" to the filter if it exists
-                if (Object.keys(discovered).length > 0) {
+                if (allStocksData["Discovered"] && Object.keys(allStocksData["Discovered"]).length > 0) {
                     const option = document.createElement('option');
                     option.value = 'Discovered';
                     option.textContent = 'Discovered';
