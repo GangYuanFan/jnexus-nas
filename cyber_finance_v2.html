@@ -600,7 +600,7 @@
                     let result = [];
                     for (let i = 0; i < closes.length; i++) {
                         if (i < period - 1) {
-                            result.push(null); // Not enough data for the first few points
+                            result.push(null);
                         } else {
                             const slice = closes.slice(i - period + 1, i + 1);
                             const sum = slice.reduce((a, b) => a + b, 0);
@@ -615,6 +615,10 @@
                 const ma20 = calculateMA(20);
                 const ma60 = calculateMA(60);
                 const ma120 = calculateMA(120);
+
+                // --- Volume Calculation ---
+                const volumes = data.map(item => item.volume);
+                const volumeColors = data.map(item => (item.close >= item.open ? '#ff3e3e' : '#00ff88'));
                 // ---------------------------
 
                 title.textContent = `${name} (${symbol}) - History Analysis`;
@@ -626,38 +630,55 @@
                 const option = {
                     backgroundColor: 'transparent',
                     legend: {
-                        data: ['K-Line', 'MA5', 'MA10', 'MA20', 'MA60', 'MA120'],
-                        textStyle: { color: '#aaa' },
-                        top: '5%'
+                        data: ['K-Line', 'MA5', 'MA10', 'MA20', 'MA60', 'MA120', 'Volume'],
+                        textStyle: { color: '#888', fontSize: 11 },
+                        top: '2%',
+                        right: 'center',
+                        padding: [0, 0, 0, 0],
+                        itemWidth: 10,
+                        itemHeight: 10,
                     },
                     tooltip: {
                         trigger: 'axis',
-                        axisPointer: { type: 'cross' },
-                        backgroundColor: 'rgba(22, 22, 37, 0.9)',
+                        axisPointer: { type: 'cross', lineStyle: { color: 'rgba(0, 242, 255, 0.5)', width: 1, type: 'dashed' } },
+                        backgroundColor: 'rgba(15, 15, 30, 0.9)',
                         borderColor: '#00f2ff',
                         textStyle: { color: '#e0e0ff' }
                     },
                     grid: {
-                        left: '0%',
-                        right: '4%',
-                        bottom: '15%',
+                        left: '5%',
+                        right: '5%',
+                        bottom: '10%',
+                        top: '12%',
                         containLabel: true
                     },
                     xAxis: {
                         type: 'category',
                         data: dates,
-                        axisLine: { lineStyle: { color: '#444' } },
-                        axisLabel: { color: '#aaa' }
+                        axisLine: { lineStyle: { color: '#333' } },
+                        axisLabel: { color: '#666', fontSize: 10 },
+                        splitLine: { show: false }
                     },
-                    yAxis: {
-                        scale: true,
-                        axisLine: { lineStyle: { color: '#444' } },
-                        axisLabel: { color: '#aaa' },
-                        splitLine: { lineStyle: { color: '#2b2b40' } }
-                    },
+                    yAxis: [
+                        {
+                            scale: true,
+                            axisLine: { show: false },
+                            axisTick: { show: false },
+                            axisLabel: { color: '#666', fontSize: 10 },
+                            splitLine: { lineStyle: { color: '#1a1a2a' } }
+                        },
+                        {
+                            scale: true,
+                            axisLine: { show: false },
+                            axisTick: { show: false },
+                            axisLabel: { show: false },
+                            splitLine: { show: false },
+                            gridIndex: 0
+                        }
+                    ],
                     dataZoom: [
                         { type: 'inside', start: 80, end: 100 },
-                        { type: 'slider', start: 80, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#aaa' }, borderColor: '#444', fillerColor: 'rgba(0, 242, 255, 0.1)' }
+                        { type: 'slider', start: 80, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#666' }, borderColor: '#222', fillerColor: 'rgba(0, 242, 255, 0.05)' }
                     ],
                     series: [
                         {
@@ -665,17 +686,38 @@
                             type: 'candlestick',
                             data: values,
                             itemStyle: {
-                                color: '#ff3e3e',
-                                color0: '#00ff88',
-                                borderColor: '#ff3e3e',
-                                borderColor0: '#00ff88'
+                                color: '#ff4d4d',
+                                color0: '#00ffaa',
+                                borderColor: '#ff4d4d',
+                                borderColor0: '#00ffaa'
                             }
                         },
-                        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, itemStyle: { color: '#F6E05E' }, lineStyle: { width: 1, color: '#F6E05E' } },
-                        { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, itemStyle: { color: '#F6AD55' }, lineStyle: { width: 1, color: '#F6AD55' } },
-                        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, itemStyle: { color: '#FC8181' }, lineStyle: { width: 1, color: '#FC8181' } },
-                        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, itemStyle: { color: '#68D391' }, lineStyle: { width: 1, color: '#68D391' } },
-                        { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, itemStyle: { color: '#63B3ED' }, lineStyle: { width: 1, color: '#63B3ED' } }
+                        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, itemStyle: { color: '#F6E05E' }, lineStyle: { width: 1.5, color: '#F6E05E' } },
+                        { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, itemStyle: { color: '#F6AD55' }, lineStyle: { width: 1.5, color: '#F6AD55' } },
+                        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, itemStyle: { color: '#FC8181' }, lineStyle: { width: 1.5, color: '#FC8181' } },
+                        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, itemStyle: { color: '#68D391' }, lineStyle: { width: 1.5, color: '#68D391' } },
+                        { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, itemStyle: { color: '#63B3ED' }, lineStyle: { width: 1.5, color: '#63B3ED' } },
+                        {
+                            name: 'Volume',
+                            type: 'bar',
+                            yAxisIndex: 1,
+                            data: volumes,
+                            itemStyle: {
+                                color: (params) => volumeColors[params.dataIndex],
+                                opacity: 0.3 // Ghost Volume
+                            },
+                            barWidth: '60%',
+                        },
+                        {
+                            name: 'Vol Trend',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            data: volumes,
+                            smooth: true,
+                            showSymbol: false,
+                            lineStyle: { width: 1, color: 'rgba(170, 170, 192, 0.3)' },
+                            itemStyle: { color: 'rgba(170, 170, 192, 0.3)' }
+                        }
                     ]
                 };
 
