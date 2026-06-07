@@ -594,9 +594,9 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
-                // Keep full history, but calculate the start percentage for the last 90 days (approx 3 months)
+                // Keep full history, but calculate the start percentage for the last 63 trading days (approx 3 months)
                 const totalBars = data.length;
-                const startPercent = totalBars > 90 ? ((totalBars - 90) / totalBars) * 100 : 0;
+                const startPercent = totalBars > 63 ? ((totalBars - 63) / totalBars) * 100 : 0;
 
                 // --- MA Calculation Logic ---
                 const closes = data.map(item => item.close);
