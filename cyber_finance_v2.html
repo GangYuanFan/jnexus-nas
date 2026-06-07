@@ -594,6 +594,29 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
+                // --- MA Calculation Logic ---
+                const closes = data.map(item => item.close);
+                const calculateMA = (period) => {
+                    let result = [];
+                    for (let i = 0; i < closes.length; i++) {
+                        if (i < period - 1) {
+                            result.push(null); // Not enough data for the first few points
+                        } else {
+                            const slice = closes.slice(i - period + 1, i + 1);
+                            const sum = slice.reduce((a, b) => a + b, 0);
+                            result.push(parseFloat((sum / period).toFixed(2)));
+                        }
+                    }
+                    return result;
+                };
+
+                const ma5 = calculateMA(5);
+                const ma10 = calculateMA(10);
+                const ma20 = calculateMA(20);
+                const ma60 = calculateMA(60);
+                const ma120 = calculateMA(120);
+                // ---------------------------
+
                 title.textContent = `${name} (${symbol}) - History Analysis`;
                 myChart = echarts.init(canvas);
 
@@ -602,6 +625,11 @@
 
                 const option = {
                     backgroundColor: 'transparent',
+                    legend: {
+                        data: ['K-Line', 'MA5', 'MA10', 'MA20', 'MA60', 'MA120'],
+                        textStyle: { color: '#aaa' },
+                        top: '5%'
+                    },
                     tooltip: {
                         trigger: 'axis',
                         axisPointer: { type: 'cross' },
@@ -631,16 +659,24 @@
                         { type: 'inside', start: 80, end: 100 },
                         { type: 'slider', start: 80, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#aaa' }, borderColor: '#444', fillerColor: 'rgba(0, 242, 255, 0.1)' }
                     ],
-                    series: [{
-                        type: 'candlestick',
-                        data: values,
-                        itemStyle: {
-                            color: '#ff3e3e',
-                            color0: '#00ff88',
-                            borderColor: '#ff3e3e',
-                            borderColor0: '#00ff88'
-                        }
-                    }]
+                    series: [
+                        {
+                            name: 'K-Line',
+                            type: 'candlestick',
+                            data: values,
+                            itemStyle: {
+                                color: '#ff3e3e',
+                                color0: '#00ff88',
+                                borderColor: '#ff3e3e',
+                                borderColor0: '#00ff88'
+                            }
+                        },
+                        { name: 'MA5', type: 'line', data: ma5, smooth: true, showSymbol: false, itemStyle: { color: '#F6E05E' }, lineStyle: { width: 1, color: '#F6E05E' } },
+                        { name: 'MA10', type: 'line', data: ma10, smooth: true, showSymbol: false, itemStyle: { color: '#F6AD55' }, lineStyle: { width: 1, color: '#F6AD55' } },
+                        { name: 'MA20', type: 'line', data: ma20, smooth: true, showSymbol: false, itemStyle: { color: '#FC8181' }, lineStyle: { width: 1, color: '#FC8181' } },
+                        { name: 'MA60', type: 'line', data: ma60, smooth: true, showSymbol: false, itemStyle: { color: '#68D391' }, lineStyle: { width: 1, color: '#68D391' } },
+                        { name: 'MA120', type: 'line', data: ma120, smooth: true, showSymbol: false, itemStyle: { color: '#63B3ED' }, lineStyle: { width: 1, color: '#63B3ED' } }
+                    ]
                 };
 
                 myChart.setOption(option);
