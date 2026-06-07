@@ -273,6 +273,48 @@
             color: var(--bg-color);
         }
 
+        .modal-content-wrapper {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .chart-main-area {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .components-panel {
+            width: 280px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .panel-title {
+            font-size: 0.9rem;
+            color: var(--accent-color);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--accent-color);
+            padding-bottom: 5px;
+            font-weight: bold;
+        }
+        .component-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--secondary-text);
+        }
+        .component-item span:last-child {
+            color: var(--accent-color);
+            font-family: monospace;
+            font-weight: bold;
+        }
         #chart-canvas {
             width: 100%;
             height: 600px;
@@ -315,7 +357,15 @@
                 <div id="chart-title">Loading Chart...</div>
                 <button id="close-chart">Close ✕</button>
             </div>
-            <div id="chart-canvas"></div>
+            <div class="modal-content-wrapper">
+                <div class="chart-main-area">
+                    <div id="chart-canvas"></div>
+                </div>
+                <div id="chart-components" class="components-panel" style="display: none;">
+                    <div class="panel-title">Top Components</div>
+                    <div id="components-list"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -503,20 +553,48 @@
             const modal = document.getElementById('chart-modal');
             const title = document.getElementById('chart-title');
             const canvas = document.getElementById('chart-canvas');
+            const compPanel = document.getElementById('chart-components');
+            const compList = document.getElementById('components-list');
+            
+            // 1. Immediate Cleanup: Dispose old chart immediately to prevent "ghost charts"
+            if (myChart) {
+                myChart.dispose();
+                myChart = null;
+            }
             
             modal.style.display = 'flex';
-            title.textContent = `${name} (${symbol}) - History Analysis`;
+            title.textContent = `Loading ${name}...`;
+            compPanel.style.display = 'none';
+            
+            // 2. ETF Component Logic (Async & Non-Blocking)
+            if (symbol.startsWith('00')) {
+                (async () => {
+                    try {
+                        const compResponse = await fetch(`/api/components/${encodeURIComponent(symbol)}`);
+                        if (!compResponse.ok) throw new Error(`Server error: ${compResponse.status}`);
+                        const components = await compResponse.json();
+                        
+                        if (Array.isArray(components) && components.length > 0) {
+                            compPanel.style.display = 'block';
+                            compList.innerHTML = components.map(c => 
+                                `<div class="component-item"><span>${c.name}</span><span>${c.weight}%</span></div>`
+                            ).join('');
+                        }
+                    } catch (e) {
+                        console.error('Component fetch failed:', e);
+                    }
+                })();
+            }
             
             try {
-                const response = await fetch(`/api/history/${symbol}`);
-                const data = await response.json();
+                // 3. History Fetch with URI encoding
+                const response = await fetch(`/api/history/${encodeURIComponent(symbol)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to fetch history`);
                 
+                const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
-                if (myChart) {
-                    myChart.dispose();
-                }
-
+                title.textContent = `${name} (${symbol}) - History Analysis`;
                 myChart = echarts.init(canvas);
 
                 const dates = data.map(item => new Date(item.time * 1000).toLocaleDateString());
@@ -566,7 +644,9 @@
                 };
 
                 myChart.setOption(option);
-                window.addEventListener('resize', () => myChart.resize());
+                window.addEventListener('resize', () => {
+                    if (myChart) myChart.resize();
+                });
 
             } catch (e) {
                 title.textContent = 'Error: ' + e.message;
