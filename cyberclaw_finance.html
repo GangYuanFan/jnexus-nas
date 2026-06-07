@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberClaw Finance | AI Stock Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0a0b1e;
+            --accent-cyan: #00f2ff;
+            --accent-purple: #bc13fe;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-main: #e0e0ff;
+            --text-dim: #a0a0c0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(0, 242, 255, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(188, 19, 254, 0.15) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(0, 242, 255, 0.5));
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2), inset 0 0 10px rgba(0, 242, 255, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .symbol {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-cyan);
+        }
+
+        .price {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            transition: color 0.3s;
+        }
+
+        .change {
+            font-size: 0.9rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .up { background: rgba(0, 255, 127, 0.2); color: #00ff7f; }
+        .down { background: rgba(255, 69, 0, 0.2); color: #ff4500; }
+
+        .chart-box {
+            height: 120px;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .components-container {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            border-top: 1px solid var(--glass-border);
+            padding-top: 0.75rem;
+            max-height: 120px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-cyan) transparent;
+        }
+        .components-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .components-container::-webkit-scrollbar-thumb {
+            background: var(--accent-cyan);
+            border-radius: 10px;
+        }
+        .component-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            color: var(--text-dim);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        }
+        .component-row span:last-child {
+            color: var(--accent-cyan);
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .footer-status {
+            margin-top: 3rem;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>CyberClaw Finance</h1>
+        <p class="subtitle">Real-time Neural Market Intelligence 🦀✨</p>
+    </header>
+
+    <div class="dashboard-grid" id="dashboard">
+        <!-- Cards generated by JavaScript -->
+    </div>
+
+    <div class="footer-status">
+        <div class="status-dot"></div>
+        <span>SYSTEM ACTIVE: Neural Link Established. Syncing with Backend...</span>
+    </div>
+
+    <script>
+        const API_URL = '/api/stocks';
+        const charts = {};
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                const dashboard = document.getElementById('dashboard');
+                
+                for (const [symbol, info] of Object.entries(data)) {
+                    let card = document.getElementById(`card-${symbol}`);
+                    
+                    if (!card) {
+                        card = document.createElement('div');
+                        card.id = `card-${symbol}`;
+                        card.className = 'glass-card';
+                        card.innerHTML = `
+                            <div class="card-header">
+                                <span class="symbol">${symbol}</span>
+                                <span id="change-${symbol}" class="change">0%</span>
+                            </div>
+                            <div id="price-${symbol}" class="price">$0.00</div>
+                            <div class="subtitle">${info.name}</div>
+                            <div id="components-${symbol}" class="components-container" style="display: none;"></div>
+                            <div class="chart-box">
+                                <canvas id="chart-${symbol}"></canvas>
+                            </div>
+                        `;
+                        dashboard.appendChild(card);
+                        
+                        const ctx = document.getElementById(`chart-${symbol}`).getContext('2d');
+                        charts[symbol] = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: info.history.slice(-90).map((_, i) => i),
+                                datasets: [{
+                                    data: info.history.slice(-90),
+                                    borderColor: '#00f2ff',
+                                    borderWidth: 2,
+                                    pointRadius: 0,
+                                    tension: 0.4,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { 
+                                    x: { display: false }, 
+                                    y: { display: false } 
+                                }
+                            }
+                        });
+                    }
+
+                    const priceEl = document.getElementById(`price-${symbol}`);
+                    const changeEl = document.getElementById(`change-${symbol}`);
+                    const oldPrice = parseFloat(priceEl.innerText.replace('$', ''));
+                    const newPrice = info.price;
+                    
+                    priceEl.innerText = `$${newPrice.toFixed(2)}`;
+                    
+                    const diff = ((newPrice - info.history[0]) / info.history[0] * 100).toFixed(2);
+                    changeEl.innerText = `${diff > 0 ? '+' : ''}${diff}%`;
+                    changeEl.className = `change ${diff >= 0 ? 'up' : 'down'}`;
+                    
+                    priceEl.style.color = newPrice >= oldPrice ? '#00ff7f' : '#ff4500';
+                    setTimeout(() => priceEl.style.color = 'var(--text-main)', 500);
+
+                    const compContainer = document.getElementById(`components-${symbol}`);
+                    if (info.components && info.components.length > 0) {
+                        compContainer.style.display = 'block';
+                        compContainer.innerHTML = info.components.map(c => 
+                            `<div class="component-row"><span>${c.name}</span><span>${c.weight}%</span></div>`
+                        ).join('');
+                    } else {
+                        compContainer.style.display = 'none';
+                    }
+
+                    const history = info.history.slice(-90);
+                    charts[symbol].data.labels = history.map((_, i) => i);
+                    charts[symbol].data.datasets[0].data = history;
+                    charts[symbol].update('none');
+                }
+            } catch (e) {
+                console.error("Fetch error:", e);
+            }
+        }
+
+        setInterval(updateDashboard, 2000);
+        updateDashboard();
+    </script>
+</body>
+</html>

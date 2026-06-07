@@ -594,6 +594,10 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
+                // Keep full history, but calculate the start percentage for the last 90 days (approx 3 months)
+                const totalBars = data.length;
+                const startPercent = totalBars > 90 ? ((totalBars - 90) / totalBars) * 100 : 0;
+
                 // --- MA Calculation Logic ---
                 const closes = data.map(item => item.close);
                 const calculateMA = (period) => {
@@ -677,8 +681,8 @@
                         }
                     ],
                     dataZoom: [
-                        { type: 'inside', start: 80, end: 100 },
-                        { type: 'slider', start: 80, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#666' }, borderColor: '#222', fillerColor: 'rgba(0, 242, 255, 0.05)' }
+                        { type: 'inside', start: startPercent, end: 100 },
+                        { type: 'slider', start: startPercent, end: 100, handleStyle: { color: '#00f2ff' }, textStyle: { color: '#666' }, borderColor: '#222', fillerColor: 'rgba(0, 242, 255, 0.05)' }
                     ],
                     series: [
                         {
@@ -722,6 +726,7 @@
                 };
 
                 myChart.setOption(option);
+
                 window.addEventListener('resize', () => {
                     if (myChart) myChart.resize();
                 });
