@@ -369,11 +369,26 @@ def get_options(symbol, expiry=None):
         puts_df = chain.puts
         
         def df_to_list(df):
-            # Select and rename columns to match frontend expectations
-            cols = {'strike': 'strike', 'lastPrice': 'lastPrice', 'bid': 'bid', 'ask': 'ask', 'volume': 'volume', 'openInterest': 'openInterest'}
+            # Column mapping: yfinance column name -> frontend key
+            cols = {
+                'strike': 'strike', 
+                'lastPrice': 'lastPrice', 
+                'bid': 'bid', 
+                'ask': 'ask', 
+                'volume': 'volume', 
+                'openInterest': 'openInterest',
+                'impliedVolatility': 'iv',
+                'inTheMoney': 'itm'
+            }
             # Filter columns that actually exist in the DF
             existing_cols = [c for c in cols.keys() if c in df.columns]
-            return df[existing_cols].to_dict('records')
+            
+            # Create a copy to avoid modifying the original DF and rename for cleaner JSON
+            temp_df = df[existing_cols].copy()
+            temp_df = temp_df.rename(columns=cols)
+            
+            # Replace NaNs with None so they are converted to null in JSON
+            return temp_df.where(pd.notnull(temp_df), None).to_dict('records')
 
         return jsonify({
             "symbol": symbol,

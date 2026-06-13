@@ -445,7 +445,7 @@
                             <div class="panel-title call-header">CALLS</div>
                             <table class="option-table" id="calls-table">
                                 <thead>
-                                    <tr><th>Strike</th><th>Last</th><th>Bid</th><th>Ask</th><th>Vol</th><th>OI</th></tr>
+                                    <tr><th>Strike</th><th>Last</th><th>Bid</th><th>Ask</th><th>IV</th><th>Vol</th><th>OI</th></tr>
                                 </thead>
                                 <tbody></tbody>
                             </table>
@@ -454,7 +454,7 @@
                             <div class="panel-title put-header">PUTS</div>
                             <table class="option-table" id="puts-table">
                                 <thead>
-                                    <tr><th>Strike</th><th>Last</th><th>Bid</th><th>Ask</th><th>Vol</th><th>OI</th></tr>
+                                    <tr><th>Strike</th><th>Last</th><th>Bid</th><th>Ask</th><th>IV</th><th>Vol</th><th>OI</th></tr>
                                 </thead>
                                 <tbody></tbody>
                             </table>
@@ -697,16 +697,20 @@
                     ).join('');
                 }
 
-                const renderRow = (row) => `
-                    <tr>
-                        <td>${row.strike}</td>
-                        <td>${row.lastPrice || '-'}</td>
-                        <td>${row.bid || '-'}</td>
-                        <td>${row.ask || '-'}</td>
-                        <td>${row.volume || 0}</td>
-                        <td>${row.openInterest || 0}</td>
-                    </tr>
-                `;
+                const renderRow = (row) => {
+                    const itmClass = row.itm ? 'style="background: rgba(0, 242, 255, 0.1);"' : '';
+                    return `
+                        <tr ${itmClass}>
+                            <td>${row.strike}</td>
+                            <td>${row.lastPrice || '-'}</td>
+                            <td>${row.bid || '-'}</td>
+                            <td>${row.ask || '-'}</td>
+                            <td>${row.iv ? (row.iv * 100).toFixed(2) + '%' : '-'}</td>
+                            <td>${row.volume || 0}</td>
+                            <td>${row.openInterest || 0}</td>
+                        </tr>
+                    `;
+                };
 
                 callsBody.innerHTML = data.calls.map(renderRow).join('');
                 putsBody.innerHTML = data.puts.map(renderRow).join('');
