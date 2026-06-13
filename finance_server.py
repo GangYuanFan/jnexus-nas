@@ -1,3 +1,4 @@
+import requests
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 import yfinance as yf
@@ -5,7 +6,13 @@ import threading
 import time
 import os
 import pandas as pd
-import requests # Added for web search
+# Remove the redundant import requests here, as it's at the top
+
+# Create a custom session to avoid Yahoo Finance blocking (User-Agent)
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+})
 
 app = Flask(__name__)
 CORS(app)
@@ -114,6 +121,61 @@ def get_etf_components(symbol):
     return etf_data.get(symbol, [])
 
 
+def web_search_stock(query):
+    """Fallback web search using Tavily to find stock info when yfinance fails."""
+    api_key = os.environ.get("TAVILY_API_KEY", "YOUR_TAVILY_API_KEY_HERE")
+    if api_key == "YOUR_TAVILY_API_KEY_HERE":
+        print("TAVILY_API_KEY not configured. Web search fallback skipped.")
+        return None
+        
+    try:
+        print(f"  Triggering web search fallback for: {query}...", flush=True)
+        response = requests.post("https://api.tavily.com/search", json={
+            "api_key": api_key,
+            "query": f"{query} 股票 即時價格 股價",
+            "search_depth": "advanced",
+            "max_results": 3
+        })
+        data = response.json()
+        
+        # Try to extract name and price from the snippets
+        import re
+        for result in data.get('results', []):
+            text = result.get('content', '')
+            print(f"  Debugging snippet: {text[:200]}...", flush=True) # Add this for debugging
+            # Look for price patterns like "價格: 48.70", "股價: 48.7", "成交價: 48.7", "成交 48.7"
+            price_match = re.search(r'(?:價格|股價|成交價|最新價|成交)[:\s]*(\d+\.?\d*)', text)
+            # Improved name match: look for Chinese characters followed by optional other chars, but NO newlines
+            name_match = re.search(r'([\u4e00-\u9fa5]{2,}[^\n\r]*)', text)
+            
+            if price_match:
+                price = float(price_match.group(1))
+                extracted_name = name_match.group(1).strip() if name_match else ""
+                
+                if not extracted_name or extracted_name.isdigit():
+                    name = query
+                else:
+                    # Clean up trailing stock codes, numbers, spaces, and parentheses
+                    name = re.sub(r'[\s\d\(\)]+$', '', extracted_name).strip()
+                    if len(name) < 2:
+                        name = query
+                
+                return {
+                    name: {
+                        "symbol": query,
+                        "price": round(price, 2),
+                        "change": 0.0,
+                        "pct_change": 0.0,
+                        "currency": "TWD",
+                        "last_updated": time.strftime("%H:%M:%S"),
+                        "source": "web_search"
+                    }
+                }
+        return None
+    except Exception as e:
+        print(f"  Web search fallback error: {e}", flush=True)
+        return None
+
 # Cache to store data grouped by category
 stocks_cache = {}
 lock = threading.Lock()
@@ -125,7 +187,7 @@ def fetch_prices():
             category_data = {}
             for name, symbol in tickers.items():
                 try:
-                    ticker = yf.Ticker(symbol)
+                    ticker = yf.Ticker(symbol, session=session)
                     info = ticker.fast_info
                     current_price = info['lastPrice']
                     prev_close = info['previousClose']
@@ -215,72 +277,150 @@ def search_stock():
     if not query:
         return jsonify({}), 200
     
-    # Try common suffixes for Taiwan and US markets
+    print(f"Searching for: {query}", flush=True)
     suffixes = ['.TW', '']
     for suffix in suffixes:
         symbol = query + suffix
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.fast_info
-            if 'lastPrice' in info:
-                # Success! Found the stock
-                current_price = info['lastPrice']
-                prev_close = info['previousClose']
-                change = current_price - prev_close
+            print(f"  Trying symbol: {symbol}", flush=True)
+            ticker = yf.Ticker(symbol, session=session)
+            
+            # Try ticker.info
+            info = ticker.info
+            if info and ('regularMarketPrice' in info or 'currentPrice' in info):
+                print(f"  SUCCESS: Found {symbol} via info", flush=True)
+                price = info.get('regularMarketPrice') or info.get('currentPrice')
+                prev_close = info.get('previousClose', price)
+                change = price - prev_close
                 pct_change = (change / prev_close) * 100 if prev_close else 0
-                
-                # Try to get a friendly name
-                name = symbol.replace('.TW', '')
-                try:
-                    # Ticker.info is slower but contains the name
-                    name = ticker.info.get('shortName', name)
-                except:
-                    pass
+                name = info.get('shortName', symbol.replace('.TW', ''))
 
                 return jsonify({
                     name: {
                         "symbol": symbol,
-                        "price": round(current_price, 2),
+                        "price": round(price, 2),
                         "change": round(change, 2),
                         "pct_change": round(pct_change, 2),
-                        "currency": info['currency'],
+                        "currency": info.get('currency', 'USD'),
                         "last_updated": time.strftime("%H:%M:%S")
                     }
                 })
-        except Exception:
+            
+            # Final fallback: check if history exists
+            hist = ticker.history(period='1d')
+            if not hist.empty:
+                print(f"  SUCCESS: Found {symbol} via history", flush=True)
+                price = hist['Close'].iloc[-1]
+                prev_close = hist['Open'].iloc[-1]
+                change = price - prev_close
+                pct_change = (change / prev_close) * 100 if prev_close else 0
+                name = symbol.replace('.TW', '')
+
+                return jsonify({
+                    name: {
+                        "symbol": symbol,
+                        "price": round(price, 2),
+                        "change": round(change, 2),
+                        "pct_change": round(pct_change, 2),
+                        "currency": "TWD" if '.TW' in symbol else "USD",
+                        "last_updated": time.strftime("%H:%M:%S")
+                    }
+                })
+                
+        except Exception as e:
+            print(f"  Error searching {symbol}: {e}", flush=True)
             continue
             
+    print(f"Search failed for query: {query}", flush=True)
+    
+    # --- Web Search Fallback ---
+    web_result = web_search_stock(query)
+    if web_result:
+        print(f"  SUCCESS: Found {query} via web search fallback", flush=True)
+        return jsonify(web_result)
+    # ---------------------------
+
     return jsonify({"error": "Stock not found"}), 404
 
-@app.route('/api/history/<symbol>')
-def get_history(symbol):
+@app.route('/api/options/<symbol>')
+@app.route('/api/options/<symbol>/<expiry>')
+def get_options(symbol, expiry=None):
     try:
-        ticker = yf.Ticker(symbol)
-        # Get maximum available history to allow deep zooming
-        df = ticker.history(period='max')
+        ticker = yf.Ticker(symbol, session=session)
         
-        if df.empty:
-            return jsonify({"error": "No data found"}), 404
+        # Taiwan stocks usually don't have options data in yfinance
+        if symbol.endswith('.TW'):
+            return jsonify({"error": "Option data is not available for Taiwan stocks via yfinance"}), 404
+
+        # Get available expiration dates
+        expirations = ticker.options
+        if not expirations:
+            return jsonify({"error": "No options data found for this symbol"}), 404
+        
+        # If no specific expiry is requested, use the first (nearest) one
+        target_expiry = expiry if expiry else expirations[0]
+        
+        if target_expiry not in expirations:
+            return jsonify({"error": f"Invalid expiry date. Available: {expirations}"}), 400
             
-        # Convert index (datetime) to timestamp and data to list of dicts
-        history = []
-        for date, row in df.iterrows():
-            try:
-                history.append({
-                    "time": int(date.timestamp()),
-                    "open": round(float(row['Open']), 2) if not pd.isna(row['Open']) else 0.0,
-                    "high": round(float(row['High']), 2) if not pd.isna(row['High']) else 0.0,
-                    "low": round(float(row['Low']), 2) if not pd.isna(row['Low']) else 0.0,
-                    "close": round(float(row['Close']), 2) if not pd.isna(row['Close']) else 0.0,
-                    "volume": int(row['Volume']) if not pd.isna(row['Volume']) else 0
-                })
-            except Exception as e:
-                print(f"Error parsing row {date}: {e}")
-                continue
+        # Fetch the option chain for the specific date
+        chain = ticker.option_chain(target_expiry)
+        calls_df = chain.calls
+        puts_df = chain.puts
         
-        return jsonify(history)
+        def df_to_list(df):
+            # Select and rename columns to match frontend expectations
+            cols = {'strike': 'strike', 'lastPrice': 'lastPrice', 'bid': 'bid', 'ask': 'ask', 'volume': 'volume', 'openInterest': 'openInterest'}
+            # Filter columns that actually exist in the DF
+            existing_cols = [c for c in cols.keys() if c in df.columns]
+            return df[existing_cols].to_dict('records')
+
+        return jsonify({
+            "symbol": symbol,
+            "expirations": expirations,
+            "current_expiry": target_expiry,
+            "calls": df_to_list(calls_df),
+            "puts": df_to_list(puts_df)
+        })
+        
     except Exception as e:
+        print(f"Options fetch error for {symbol}: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/history/<symbol>')
+
+def get_history(symbol):
+    # Try original symbol first, then try adding .TW for Taiwan stocks
+    symbols_to_try = [symbol, symbol + '.TW'] if not symbol.endswith('.TW') else [symbol]
+    
+    for s in symbols_to_try:
+        try:
+            ticker = yf.Ticker(s, session=session)
+            # Get maximum available history to allow deep zooming
+            df = ticker.history(period='max')
+            
+            if not df.empty:
+                # Convert index (datetime) to timestamp and data to list of dicts
+                history = []
+                for date, row in df.iterrows():
+                    try:
+                        history.append({
+                            "time": int(date.timestamp()),
+                            "open": round(float(row['Open']), 2) if not pd.isna(row['Open']) else 0.0,
+                            "high": round(float(row['High']), 2) if not pd.isna(row['High']) else 0.0,
+                            "low": round(float(row['Low']), 2) if not pd.isna(row['Low']) else 0.0,
+                            "close": round(float(row['Close']), 2) if not pd.isna(row['Close']) else 0.0,
+                            "volume": int(row['Volume']) if not pd.isna(row['Volume']) else 0
+                        })
+                    except Exception as e:
+                        print(f"Error parsing row {date}: {e}")
+                        continue
+                return jsonify(history)
+        except Exception as e:
+            print(f"Error fetching history for {s}: {e}")
+            continue
+            
+    return jsonify({"error": "No data found"}), 404
 
 if __name__ == '__main__':
     thread = threading.Thread(target=fetch_prices, daemon=True)
