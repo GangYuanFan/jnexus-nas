@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JERRY'S NEXUS | DSM Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0f; color: #e0e0e0; font-family: 'Inter', sans-serif; }
+        
+        /* Layout */
+        #app { display: flex; min-height: 100vh; }
+        
+        /* Sidebar - Synology Style */
+        #sidebar { width: 80px; background: rgba(10,10,15,0.95); backdrop-filter: blur(20px); border-right: 1px solid rgba(255,255,255,0.06); padding: 1.5rem 0; display: flex; flex-direction: column; align-items: center; position: fixed; top: 0; left: 0; height: 100vh; z-index: 50; transition: width 0.3s ease; }
+        #sidebar .logo { padding: 0 0 1.5rem; font-size: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 1rem; width: 100%; text-align: center; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 60px; height: 60px; margin: 0.5rem; font-size: 20px; color: rgba(255,255,255,0.3); cursor: pointer; transition: all 0.2s; border-radius: 12px; text-decoration: none; text-align: center; position: relative; }
+        .nav-item span { font-size: 9px; margin-top: 4px; opacity: 0; transition: opacity 0.2s; }
+        .nav-item:hover { color: #fff; background: rgba(255,255,255,0.08); }
+        .nav-item:hover span { opacity: 1; }
+        .nav-item.active { color: #fff; background: rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .nav-item.active span { opacity: 1; }
+        
+        /* Main - Adjust for thinner sidebar */
+        #main { flex: 1; margin-left: 80px; padding: 2rem; max-width: 100%; overflow-x: hidden; }
+        
+        /* Main */
+        #main { flex: 1; margin-left: 240px; padding: 2rem; max-width: 100%; overflow-x: hidden; }
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        /* Dashboard Cards */
+        .card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.5rem; transition: all 0.3s; }
+        .card:hover { background: rgba(255,255,255,0.05); }
+        .card .label { font-size: 11px; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .card .value { font-size: 1.8rem; font-weight: 700; }
+        .card .sub { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+        .card .bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+        .card .bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #4f8, #0af); transition: width 1s ease; }
+        
+        /* File Manager */
+        .page-header { margin-bottom: 1.5rem; }
+        .page-header h2 { font-size: 1.5rem; font-weight: 700; }
+        .page-header .breadcrumb { font-size: 13px; color: rgba(255,255,255,0.35); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+        .bc-item { cursor: pointer; transition: color 0.2s; }
+        .bc-item:hover { color: #fff; }
+        
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+        .toolbar button, .toolbar label { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #ccc; padding: 0.4rem 0.8rem; border-radius: 10px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .toolbar button:hover, .toolbar label:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff; }
+        .toolbar button:disabled { opacity: 0.2; cursor: default; }
+        .toolbar input[type="text"] { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.4rem 0.8rem; border-radius: 10px; font-size: 13px; outline: none; min-width: 180px; }
+        .toolbar input[type="text"]:focus { border-color: rgba(255,255,255,0.2); }
+        
+        /* File Entry (List) */
+        .file-entry { display: flex; align-items: center; padding: 0.5rem 1rem; border-radius: 10px; cursor: pointer; transition: all 0.15s; gap: 10px; font-size: 13px; }
+        .file-entry:hover { background: rgba(255,255,255,0.05); }
+        .file-entry .icon { font-size: 1.3rem; }
+        .file-entry .name { flex: 1; font-weight: 500; color: rgba(255,255,255,0.85); }
+        .file-entry .size { color: rgba(255,255,255,0.3); font-size: 12px; }
+        .file-entry .actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
+        .file-entry:hover .actions { opacity: 1; }
+        .file-entry .actions button { background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 14px; }
+        .file-entry .actions button:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        
+        /* Grid toggle */
+        .file-grid { display: flex; flex-direction: column; gap: 2px; }
+        .file-grid.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+        .file-grid.grid .file-entry { flex-direction: column; text-align: center; padding: 1.2rem 0.8rem; }
+        .file-grid.grid .file-entry .icon { font-size: 2rem; }
+        .file-grid.grid .file-entry .size { display: none; }
+        .file-grid.grid .file-entry .actions { position: absolute; top: 6px; right: 6px; }
+        .file-grid.grid .file-entry { position: relative; }
+        
+        /* Context Menu */
+        #ctx-menu { position: fixed; z-index: 200; background: rgba(18,18,30,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; width: 160px; display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.6); overflow: hidden; }
+        .ctx-item { padding: 0.65rem 1rem; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+        .ctx-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+        .ctx-item.danger { color: rgba(255,80,80,0.7); }
+        .ctx-item.danger:hover { background: rgba(255,80,80,0.08); color: #ff5050; }
+        .ctx-divider { height: 1px; background: rgba(255,255,255,0.04); margin: 4px 0; }
+        
+        /* Editor */
+        #editor-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(5,5,10,0.92); backdrop-filter: blur(24px); padding: 1.5rem; }
+        .editor-wrap { max-width: 1100px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; gap: 0.8rem; }
+        .editor-head { display: flex; justify-content: space-between; align-items: center; }
+        .editor-head .path { font-size: 13px; color: rgba(255,255,255,0.4); font-family: monospace; }
+        .editor-head button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #ccc; padding: 0.4rem 1rem; border-radius: 10px; font-size: 12px; cursor: pointer; }
+        .editor-head button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .editor-head .save-btn { background: #fff; color: #000; font-weight: 600; }
+        .editor-head .save-btn:hover { background: #ddd; }
+        #monaco-box { flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
+        
+        .loading { display: flex; justify-content: center; padding: 3rem; }
+        .spinner { width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.06); border-top-color: rgba(255,255,255,0.5); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        #auth-overlay { position: fixed; inset: 0; z-index: 999; background: #0a0a0f; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        .auth-box { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 2.5rem; max-width: 340px; width: 100%; text-align: center; }
+        .auth-box h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; }
+        .auth-box p { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 1.5rem; }
+        .auth-box input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.7rem; border-radius: 12px; outline: none; text-align: center; margin-bottom: 1rem; font-size: 14px; }
+        .auth-box input:focus { border-color: rgba(255,255,255,0.2); }
+        .auth-box button { width: 100%; background: #fff; color: #000; border: none; padding: 0.7rem; border-radius: 12px; font-weight: 600; cursor: pointer; }
+        .auth-box .err { color: #ff5050; font-size: 12px; margin-top: 0.5rem; opacity: 0; transition: opacity 0.3s; }
+        
+        #sidebar-toggle, #sidebar-close { display: none; }
+        
+        @media (max-width: 768px) {
+            #sidebar { transform: translateX(-100%); }
+            #sidebar.open { transform: translateX(0); }
+            #main { margin-left: 0; padding: 1rem; padding-top: 3.5rem; }
+            #sidebar-toggle { display: flex; position: fixed; top: 0.6rem; left: 0.6rem; z-index: 60; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
+            #sidebar-close { display: flex; position: absolute; top: 0.6rem; right: 0.6rem; background: rgba(255,255,255,0.04); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+</head>
+<body>
+
+<div id="auth-overlay">
+    <div class="auth-box">
+        <h2>J.NEXUS</h2>
+        <p>Enter Access Key to proceed</p>
+        <input type="password" id="access-key" placeholder="Access Key...">
+        <button onclick="checkAuth()">UNLOCK</button>
+        <div class="err" id="auth-err">Invalid key. Try again.</div>
+    </div>
+</div>
+
+<div id="app" style="display:none">
+        <!-- Sidebar -->
+    <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+    <button id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <nav id="sidebar">
+        <button id="sidebar-close" onclick="closeSidebar()">✕</button>
+        <div class="logo">🦞</div>
+        <a class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></a>
+        <a class="nav-item" data-page="files" onclick="switchPage('files')">📁 <span>Files</span></a>
+        <a class="nav-item" data-page="system" onclick="switchPage('system')">⚙️ <span>System</span></a>
+    </nav>
+
+    <!-- Main -->
+    <main id="main">
+
+        <!-- Dashboard Page -->
+        <div class="page active" id="page-dashboard">
+            <div class="page-header">
+                <h2>Dashboard</h2>
+                <div class="breadcrumb">System Overview</div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="card">
+                    <div class="label">CPU Usage</div>
+                    <div class="value" id="dash-cpu">—</div>
+                    <div class="sub">load average</div>
+                    <div class="bar"><div class="bar-fill" id="dash-cpu-bar" style="width:0%"></div></div>
+                </div>
+                <div class="card">
+                    <div class="label">Memory</div>
+                    <div class="value" id="dash-mem">—</div>
+                    <div class="sub" id="dash-mem-detail">—</div>
+                    <div class="bar"><div class="bar-fill" id="dash-mem-bar" style="width:0%"></div></div>
+                </div>
+                <div class="card">
+                    <div class="label">Disk</div>
+                    <div class="value" id="dash-disk">—</div>
+                    <div class="sub" id="dash-disk-detail">—</div>
+                    <div class="bar"><div class="bar-fill" id="dash-disk-bar" style="width:0%"></div></div>
+                </div>
+                <div class="card">
+                    <div class="label">Uptime</div>
+                    <div class="value" id="dash-uptime">—</div>
+                    <div class="sub">last boot unknown</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Files Page -->
+        <div class="page" id="page-files">
+            <div class="page-header">
+                <h2>File Station</h2>
+                <div class="breadcrumb" id="breadcrumb">/ home / jerry / workspace</div>
+            </div>
+            
+            <div class="toolbar">
+                <button onclick="goUp()">⬆️ Up</button>
+                <button id="btn-back" onclick="goBack()">⬅️ Back</button>
+                <button id="btn-forward" onclick="goForward()">➡️ Fwd</button>
+                <button onclick="refresh()">🔄 Refresh</button>
+                <input type="text" id="search-bar" placeholder="Search files..." oninput="handleSearch()">
+                <button onclick="createFolder()">📁 New Folder</button>
+                <label>☁️ Upload<input type="file" hidden onchange="handleUpload(this)"></label>
+                <button onclick="toggleGrid()">🔲 Toggle View</button>
+            </div>
+            
+            <div id="file-grid" class="file-grid">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </div>
+
+        <!-- System Info -->
+        <div class="page" id="page-system">
+            <div class="page-header">
+                <h2>System Information</h2>
+                <div class="breadcrumb">Hardware & Software Details</div>
+            </div>
+            <div id="sys-content">Loading...</div>
+        </div>
+    </main>
+</div>
+
+<!-- Editor Overlay -->
+<div id="editor-overlay">
+    <div class="editor-wrap">
+        <div class="editor-head">
+            <div class="path" id="editor-path">/path/to/file</div>
+            <div style="display:flex;gap:8px">
+                <button onclick="closeEditor()">Cancel</button>
+                <button class="save-btn" onclick="saveFile()">💾 Save</button>
+            </div>
+        </div>
+        <div id="monaco-box"></div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="ctx-menu">
+    <div class="ctx-item" onclick="ctxAction('edit')">📝 Edit</div>
+    <div class="ctx-item" onclick="ctxAction('download')">⬇️ Download</div>
+    <div class="ctx-item" onclick="ctxAction('rename')">✏️ Rename</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+let currentPath = "", histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false;
+const ROOT = "/home/jerry/workspace";
+
+window.addEventListener('click', e => {
+    document.getElementById('ctx-menu').style.display = 'none';
+});
+
+/* Auth */
+function checkAuth() {
+    const k = document.getElementById('access-key').value;
+    if (k === "JERRY_NEXUS_2026") {
+        document.getElementById('auth-overlay').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('app').style.display = 'flex';
+            loadFiles("", true);
+            loadDashboard();
+        }, 400);
+    } else {
+        const e = document.getElementById('auth-err');
+        e.style.opacity = '1';
+        setTimeout(() => e.style.opacity = '0', 2000);
+    }
+}
+document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
+
+/* Sidebar */
+function switchPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const page = document.getElementById('page-' + name);
+    if (page) page.classList.add('active');
+    const navItem = document.querySelector(`.nav-item[data-page="${name}"]`);
+    if (navItem) navItem.classList.add('active');
+    if (name === 'dashboard') loadDashboard();
+    if (name === 'system') loadSystemInfo();
+    closeSidebar();
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
+
+/* Dashboard */
+async function loadDashboard() {
+    try {
+        const r = await fetch('/api/sysinfo');
+        const d = await r.json();
+        document.getElementById('dash-cpu').textContent = d.cpu_percent.toFixed(1) + '%';
+        document.getElementById('dash-cpu-bar').style.width = d.cpu_percent + '%';
+        document.getElementById('dash-mem').textContent = (d.memory.used_gb).toFixed(1) + ' GB';
+        document.getElementById('dash-mem-detail').textContent = 'of ' + (d.memory.total_gb).toFixed(1) + ' GB';
+        document.getElementById('dash-mem-bar').style.width = d.memory.percent + '%';
+        document.getElementById('dash-disk').textContent = (d.disk.used_gb).toFixed(1) + ' GB';
+        document.getElementById('dash-disk-detail').textContent = 'of ' + (d.disk.total_gb).toFixed(1) + ' GB';
+        document.getElementById('dash-disk-bar').style.width = d.disk.percent + '%';
+        document.getElementById('dash-uptime').textContent = d.uptime_human;
+    } catch(e) {
+        console.log("Dashboard load error:", e);
+    }
+}
+
+/* System Info */
+async function loadSystemInfo() {
+    const el = document.getElementById('sys-content');
+    try {
+        const r = await fetch('/api/sysinfo');
+        const d = await r.json();
+        el.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="card"><div class="label">CPU</div><div class="value">${d.cpu_count} cores</div><div class="sub">${d.cpu_percent.toFixed(1)}% utilized</div></div>
+                <div class="card"><div class="label">Platform</div><div class="value" style="font-size:1.2rem">${d.platform}</div><div class="sub">${d.hostname}</div></div>
+                <div class="card"><div class="label">Memory</div><div class="value">${(d.memory.total_gb).toFixed(1)} GB</div><div class="sub">${(d.memory.used_gb).toFixed(1)} GB used</div></div>
+                <div class="card"><div class="label">Disk</div><div class="value">${(d.disk.total_gb).toFixed(1)} GB</div><div class="sub">${(d.disk.used_gb).toFixed(1)} GB used</div></div>
+            </div>
+        `;
+    } catch(e) {
+        el.innerHTML = '<div class="card">Failed to load system info.</div>';
+    }
+}
+
+/* File Manager */
+async function loadFiles(path, pushHist = true) {
+    currentPath = path;
+    const grid = document.getElementById('file-grid');
+    grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    renderBreadcrumb(path);
+    
+    if (pushHist) {
+        histStack = histStack.slice(0, histIdx + 1);
+        histStack.push(path);
+        histIdx++;
+    }
+    updateNav();
+    
+    try {
+        const r = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
+        allFiles = await r.json();
+        renderFiles(allFiles);
+    } catch(e) { grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">Error loading files</div>'; }
+}
+
+function renderBreadcrumb(path) {
+    const el = document.getElementById('breadcrumb');
+    el.innerHTML = '';
+    const parts = path ? path.split('/') : [];
+    const rootSpan = document.createElement('span');
+    rootSpan.className = 'bc-item'; rootSpan.textContent = '/ home'; rootSpan.onclick = () => loadFiles('');
+    el.appendChild(rootSpan);
+    let cum = '';
+    parts.forEach((p, i) => {
+        cum += (i===0?'':'/') + p;
+        const sp = document.createElement('span');
+        sp.className = 'bc-item'; sp.textContent = ' / ' + p; sp.onclick = () => loadFiles(cum);
+        el.appendChild(sp);
+    });
+}
+
+function renderFiles(files) {
+    const grid = document.getElementById('file-grid');
+    if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
+    
+    grid.className = 'file-grid' + (isGrid ? ' grid' : '');
+    grid.innerHTML = '';
+    
+    files.forEach(f => {
+        const entry = document.createElement('div');
+        entry.className = 'file-entry';
+        const icon = f.is_dir ? '📁' : '📄';
+        const fpath = currentPath ? currentPath + '/' + f.name : f.name;
+        const size = f.is_dir ? '' : (f.size / 1024).toFixed(1) + ' KB';
+        
+        entry.innerHTML = `
+            <span class="icon">${icon}</span>
+            <span class="name">${f.name}</span>
+            <span class="size">${size}</span>
+            <span class="actions">
+                ${f.is_dir ? '' : '<button onclick="event.stopPropagation();download(\''+encodeURIComponent(fpath)+'\')" title="Download">⬇️</button>'}
+                <button onclick="event.stopPropagation();showCtx(event,'${f.name}','${encodeURIComponent(fpath)}',${f.is_dir})" title="More">⋮</button>
+            </span>
+        `;
+        
+        entry.onclick = () => {
+            if (f.is_dir) { loadFiles(fpath); return; }
+            if (isEditable(f.name)) openEditor(fpath);
+            else download(encodeURIComponent(fpath));
+        };
+        grid.appendChild(entry);
+    });
+}
+
+function showCtx(e, name, encPath, isDir) {
+    ctxTarget = { name, encPath, isDir };
+    const m = document.getElementById('ctx-menu');
+    m.style.display = 'block';
+    m.style.left = Math.min(e.pageX, window.innerWidth - 170) + 'px';
+    m.style.top = Math.min(e.pageY, window.innerHeight - 250) + 'px';
+}
+
+function ctxAction(action) {
+    if (!ctxTarget) return;
+    const { name, encPath, isDir } = ctxTarget;
+    const path = decodeURIComponent(encPath);
+    
+    if (action === 'edit') { if(!isDir && isEditable(name)) openEditor(path); else alert('Not editable'); }
+    else if (action === 'download') { download(encPath); }
+    else if (action === 'rename') {
+        const nn = prompt('New name:', name);
+        if (nn && nn !== name) {
+            fetch('/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) })
+            .then(r=>r.json()).then(r=>{ if(r.success) refresh(); else alert(r.error); });
+        }
+    }
+    else if (action === 'delete') {
+        if (confirm('Delete "' + name + '" ?')) {
+            fetch('/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) })
+            .then(r=>r.json()).then(r=>{ if(r.success) refresh(); else alert(r.error); });
+        }
+    }
+    document.getElementById('ctx-menu').style.display = 'none';
+}
+
+function handleSearch() {
+    const q = document.getElementById('search-bar').value.toLowerCase();
+    renderFiles(allFiles.filter(f => f.name.toLowerCase().includes(q)));
+}
+
+function goBack() { if(histIdx>0) { histIdx--; loadFiles(histStack[histIdx],false); } }
+function goForward() { if(histIdx<histStack.length-1) { histIdx++; loadFiles(histStack[histIdx],false); } }
+function goUp() { if(!currentPath) return; const p=currentPath.split('/'); p.pop(); loadFiles(p.join('/')); }
+function refresh() { loadFiles(currentPath); }
+function download(ep) { window.location.href = '/api/download?path=' + ep; }
+function updateNav() {
+    document.getElementById('btn-back').disabled = histIdx <= 0;
+    document.getElementById('btn-forward').disabled = histIdx >= histStack.length - 1;
+}
+function toggleGrid() { isGrid = !isGrid; renderFiles(allFiles); }
+
+async function createFolder() {
+    const n = prompt('Folder name:');
+    if (!n) return;
+    const r = await fetch('/api/mkdir', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, name:n}) });
+    const d = await r.json();
+    if (d.success) refresh(); else alert(d.error);
+}
+
+async function handleUpload(input) {
+    const f = input.files[0];
+    if (!f) return;
+    const fd = new FormData(); fd.append('file',f); fd.append('path',currentPath);
+    const r = await fetch('/api/upload', { method:'POST', body:fd });
+    const d = await r.json();
+    if (d.success) refresh(); else alert(d.error);
+}
+
+function isEditable(name) {
+    return ['txt','py','md','json','html','css','js','yml','yaml','log','sh','cpp','h','c','hpp','cc'].includes(name.split('.').pop().toLowerCase());
+}
+
+/* Monaco Editor */
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+require(['vs/editor/editor.main'], function() { console.log("Monaco loaded"); });
+
+async function openEditor(path) {
+    try {
+        const r = await fetch('/api/read?path=' + encodeURIComponent(path));
+        if (!r.ok) throw new Error(await r.text());
+        const content = await r.text();
+        document.getElementById('editor-path').textContent = ROOT + path;
+        document.getElementById('editor-overlay').style.display = 'block';
+        setTimeout(() => {
+            const ext = path.split('.').pop().toLowerCase();
+            const langMap = { py:'python', md:'markdown', json:'json', html:'html', css:'css', js:'javascript', yml:'yaml', yaml:'yaml', sh:'shell', txt:'plaintext', cpp:'cpp', h:'cpp', c:'c', hpp:'cpp', cc:'cpp' };
+            if (!editor) {
+                editor = monaco.editor.create(document.getElementById('monaco-box'), {
+                    value: content, language: langMap[ext] || 'plaintext', theme: 'vs-dark',
+                    automaticLayout: true, fontSize: 14, fontFamily: 'Fira Code, monospace',
+                    minimap: { enabled: false }, padding: { top: 16 }
+                });
+            } else {
+                editor.setValue(content);
+                monaco.editor.setModelLanguage(editor.getModel(), langMap[ext] || 'plaintext');
+            }
+        }, 80);
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+function closeEditor() { document.getElementById('editor-overlay').style.display = 'none'; }
+
+async function saveFile() {
+    const path = document.getElementById('editor-path').textContent.replace(ROOT, '');
+    const content = editor ? editor.getValue() : '';
+    try {
+        const r = await fetch('/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, content}) });
+        const d = await r.json();
+        if (d.success) { alert('Saved! ✨'); closeEditor(); }
+        else throw new Error(d.error);
+    } catch(e) { alert('Error: ' + e.message); }
+}
+
+document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
+</script>
+</body>
+</html>
