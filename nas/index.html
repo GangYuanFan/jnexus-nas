@@ -579,13 +579,28 @@ async function openEditor(path) {
         const r = await apiFetch('/nas/api/read?path=' + encodeURIComponent(path));
         const content = await r.text();
         
-        // Fix path display: ensure there's a slash between ROOT and path
         const displayPath = (ROOT.endsWith('/') ? ROOT : ROOT + '/') + (path.startsWith('/') ? path.slice(1) : path);
         document.getElementById('editor-path').textContent = displayPath;
         
+        // Determine Monaco language based on extension
+        const ext = path.split('.').pop().toLowerCase();
+        const langMap = {
+            'py': 'python', 'js': 'javascript', 'ts': 'typescript', 'html': 'html', 
+            'css': 'css', 'json': 'json', 'md': 'markdown', 'yml': 'yaml', 
+            'yaml': 'yaml', 'sh': 'shell', 'txt': 'plaintext', 'log': 'plaintext'
+        };
+        const language = langMap[ext] || 'plaintext';
+        
         document.getElementById('editor-overlay').style.display = 'block';
         setTimeout(() => {
-            editor = monaco.editor.create(box, { value: content, language: 'plaintext', theme: 'vs-dark', automaticLayout: true });
+            editor = monaco.editor.create(box, { 
+                value: content, 
+                language: language, 
+                theme: 'vs-dark', 
+                automaticLayout: true,
+                fontSize: 14,
+                minimap: { enabled: false }
+            });
             document.getElementById('btn-save').onclick = saveFile;
         }, 80);
     } catch(e) { alert('Error: ' + e.message); }
