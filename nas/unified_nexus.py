@@ -25,9 +25,10 @@ app = Flask(__name__)
 CORS(app)
 app.json.sort_keys = False
 
-# --- GLOBAL CONFIG (initialized via init_app) ---
+# --- GLOBAL CONFIG ---
 ROOT_DIR = '/tmp' 
 THUMB_DIR = '/tmp/nas_thumbnails'
+NAS_PASSWORD = 'JERRY_NEXUS_2026'
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
@@ -35,32 +36,44 @@ VID_EXTS = {'.mp4','.mov','.avi','.mkv','.webm'}
 
 def init_app(root, password, port):
     \"\"\"Initialize server configuration from GUI arguments.\"\"\"
-    global ROOT_DIR, THUMB_DIR
+    global ROOT_DIR, THUMB_DIR, NAS_PASSWORD
     ROOT_DIR = os.path.abspath(root)
-    # Use system temp dir for thumbnails to avoid permission issues
+    NAS_PASSWORD = password
     THUMB_DIR = os.path.join(os.environ.get('TEMP', '/tmp'), 'nas_thumbnails')
     os.makedirs(THUMB_DIR, exist_ok=True)
-    logging.info(f"Server initialized with ROOT_DIR={ROOT_DIR}, THUMB_DIR={THUMB_DIR}")
+    logging.info(f"Server initialized: ROOT={ROOT_DIR}, PASS={NAS_PASSWORD}, PORT={port}")
 
 # --- NAS BLUEPRINT ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
 
+# Simple password verification helper
+def verify_password():
+    auth_pass = request.args.get('pwd') or request.headers.get('X-NAS-Password')
+    if auth_pass != NAS_PASSWORD:
+        return False
+    return True
+
+@nas_bp.before_request
+def check_auth():
+    # Allow access to index.html without password, but protect all API calls
+    if request.endpoint and request.endpoint.startswith('api_'):
+        if not verify_password():
+            return jsonify({"error": "Invalid Password"}), 403
+
 @nas_bp.route('/')
 def serve_nas_index():
-    # Precise path detection for bundled vs dev mode
     if getattr(sys, 'frozen', False):
-        # In PyInstaller bundle: index.html is in sys._MEIPASS/nas/index.html
         frontend_path = os.path.join(sys._MEIPASS, 'nas')
     else:
-        # In dev mode: this file is in .../nas/unified_nexus.py
-        # index.html is in the same directory
         frontend_path = os.path.dirname(os.path.abspath(__file__))
-    
-    logging.debug(f"Serving index.html from: {frontend_path}")
     return send_from_directory(frontend_path, 'index.html')
 
+@nas_bp.route('/api/root')
+def get_root():
+    return jsonify({"root": ROOT_DIR})
+
 @nas_bp.route('/api/sysinfo')
-def system_info():
+def api_sysinfo():
     cpu_percent = psutil.cpu_percent(interval=0.5)
     cpu_count = psutil.cpu_count()
     mem = psutil.virtual_memory()
@@ -77,7 +90,7 @@ def system_info():
     })
 
 @nas_bp.route('/api/read')
-def read_file():
+def api_read():
     path = request.args.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
@@ -87,7 +100,7 @@ def read_file():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/save', methods=['POST'])
-def save_file():
+def api_save():
     data = request.json
     path = data['path']
     if path.startswith('/'): path = path.lstrip('/')
@@ -105,7 +118,7 @@ def save_file():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/files')
-def list_files():
+def api_files():
     path = request.args.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
@@ -122,7 +135,7 @@ def list_files():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/mkdir', methods=['POST'])
-def make_dir():
+def api_mkdir():
     data = request.json
     path = data['path']
     if path.startswith('/'): path = path.lstrip('/')
@@ -134,7 +147,7 @@ def make_dir():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/upload', methods=['POST'])
-def upload_file():
+def api_upload():
     file = request.files['file']
     path = request.form.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
@@ -146,7 +159,7 @@ def upload_file():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/delete', methods=['POST'])
-def delete_item():
+def api_delete():
     path = request.json.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
@@ -158,7 +171,7 @@ def delete_item():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/rename', methods=['POST'])
-def rename_item():
+def api_rename():
     data = request.json
     old_p = data['oldPath']
     if old_p.startswith('/'): old_p = old_p.lstrip('/')
@@ -174,7 +187,7 @@ def rename_item():
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/download')
-def download_file():
+def api_download():
     path = request.args.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
@@ -182,7 +195,7 @@ def download_file():
     return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path), as_attachment=True)
 
 @nas_bp.route('/api/view')
-def view_file():
+def api_view():
     path = request.args.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
@@ -190,7 +203,7 @@ def view_file():
     return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path), as_attachment=False)
 
 @nas_bp.route('/api/thumbnail')
-def get_thumbnail():
+def api_thumbnail():
     path = request.args.get('path', '')
     if path.startswith('/'): path = path.lstrip('/')
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))

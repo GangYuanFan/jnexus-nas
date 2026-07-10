@@ -4,10 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JERRY'S NAS | DSM Mobile</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -146,7 +186,17 @@
             #sidebar-close { display: flex; position: absolute; top: 0.6rem; right: 0.6rem; background: rgba(255,255,255,0.04); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
 </head>
 <body>
 
@@ -319,7 +369,17 @@
     <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js">
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
+</script>
 <script>
 let currentPath = "", sortMode = "name", sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = "";
 const ROOT = "/home/jerry/workspace";
@@ -973,6 +1033,16 @@ document.getElementById('app').addEventListener('drop', e => {
         handleUpload(null, files);
     }
 });
+
+async function updateRootDisplay() {
+    try {
+        const response = await fetch();
+        const data = await response.json();
+        document.getElementById('path-display').innerText = data.root;
+    } catch (e) { console.error('Failed to fetch root path', e); }
+}
+
+    updateRootDisplay();
 </script>
 
 </body>
