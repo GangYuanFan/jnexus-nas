@@ -1,4 +1,13 @@
+import logging
 import argparse
+
+logging.basicConfig(
+    filename='nas_server_debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8'
+)
+
 import requests
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect
 from flask_cors import CORS

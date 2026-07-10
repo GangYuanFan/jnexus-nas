@@ -1,12 +1,21 @@
+import logging
 import sys
 import os
 import subprocess
 import webbrowser
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
-                             QFileDialog, QMessageBox)
+                             QFileDialog, QMessageBox, QStyle)
 from PySide6.QtCore import Qt, QProcess
 from PySide6 import QtGui
+
+
+logging.basicConfig(
+    filename='nas_gui_debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8'
+)
 
 class NasGui(QMainWindow):
     def __init__(self):
@@ -18,7 +27,7 @@ class NasGui(QMainWindow):
         # To use a custom icon, place 'icon.ico' in the same folder and use:
         # self.setWindowIcon(QtGui.QIcon('icon.ico'))
         # For now, using a generic system icon
-        self.setWindowIcon(self.style().standardIcon(QtGui.QStyle.SP_ComputerIcon))
+        self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
         self.process = None
 
@@ -112,6 +121,10 @@ class NasGui(QMainWindow):
             self.process.started.connect(self.on_server_started)
             self.process.finished.connect(self.on_server_stopped)
             
+            
+            self.process.readyReadStandardOutput.connect(self.handle_stdout)
+            self.process.readyReadStandardError.connect(self.handle_stderr)
+
             self.process.start('python', [script_path, '--root', root, '--password', password, '--port', port])
             
         except Exception as e:
@@ -133,6 +146,16 @@ class NasGui(QMainWindow):
         self.root_input.setEnabled(True)
         self.pass_input.setEnabled(True)
         self.port_input.setEnabled(True)
+
+    
+    def handle_stdout(self):
+        data = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
+        logging.debug(f'STDOUT: {data.strip()}')
+
+    def handle_stderr(self):
+        data = self.process.readAllStandardError().data().decode('utf-8', errors='replace')
+        logging.error(f'STDERR: {data.strip()}')
+
 
     def stop_server(self):
         if self.process:
