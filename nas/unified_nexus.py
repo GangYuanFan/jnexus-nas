@@ -224,6 +224,186 @@ def view_file():
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path), as_attachment=False)
 
+# ====== DOCUMENT READ/WRITE APIs ======
+
+@nas_bp.route('/api/read_doc')
+@require_auth
+def read_document():
+    """Read Office/PDF document, return structured JSON for frontend card."""
+    path = request.args.get('path', '')
+    full_path = resolve_path(path)
+    if not full_path.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+
+    ext = os.path.splitext(full_path)[1].lower()
+
+    try:
+        if ext == '.docx':
+            from docx import Document
+            doc = Document(full_path)
+            paragraphs = []
+            for p in doc.paragraphs:
+                if p.text.strip():
+                    paragraphs.append({
+                        "text": p.text,
+                        "style": p.style.name if p.style else "Normal"
+                    })
+            return jsonify({
+                "type": "word",
+                "content": paragraphs,
+                "filepath": path,
+                "filename": os.path.basename(full_path)
+            })
+
+        elif ext in ('.xls', '.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(full_path, data_only=True)
+            sheets = {}
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                data = []
+                for row in ws.iter_rows(values_only=True):
+                    data.append([str(c) if c is not None else "" for c in row])
+                sheets[sheet_name] = data
+            wb.close()
+            return jsonify({
+                "type": "excel",
+                "sheets": sheets,
+                "activeSheet": wb.sheetnames[0] if wb.sheetnames else "",
+                "sheetNames": wb.sheetnames,
+                "filepath": path,
+                "filename": os.path.basename(full_path)
+            })
+
+        elif ext == '.pptx':
+            from pptx import Presentation
+            prs = Presentation(full_path)
+            slides = []
+            for slide in prs.slides:
+                texts = []
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for p in shape.text_frame.paragraphs:
+                            t = p.text.strip()
+                            if t:
+                                texts.append(t)
+                slides.append({"texts": texts})
+            return jsonify({
+                "type": "powerpoint",
+                "slides": slides,
+                "slideCount": len(slides),
+                "filepath": path,
+                "filename": os.path.basename(full_path)
+            })
+
+        elif ext == '.pdf':
+            import pypdf
+            reader = pypdf.PdfReader(full_path)
+            pages = []
+            for page in reader.pages:
+                pages.append(page.extract_text())
+            return jsonify({
+                "type": "pdf",
+                "pages": pages,
+                "pageCount": len(pages),
+                "filepath": path,
+                "filename": os.path.basename(full_path)
+            })
+
+        return jsonify({"error": f"Unsupported: {ext}"}), 400
+
+    except Exception as e:
+        logger.error(f"read_doc error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@nas_bp.route('/api/pdf_page')
+@require_auth
+def pdf_page_image():
+    """Render one PDF page as JPEG image using pypdfium2."""
+    path = request.args.get('path', '')
+    page_num = int(request.args.get('page', 0))
+    scale = float(request.args.get('scale', '1.5'))
+
+    full_path = resolve_path(path)
+    if not full_path.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(full_path)
+        if page_num >= len(pdf):
+            return jsonify({"error": "Page not found"}), 404
+
+        page = pdf[page_num]
+        bitmap = page.render(scale=scale)
+        pil_image = bitmap.to_pil()
+        img_io = io.BytesIO()
+        pil_image.save(img_io, 'JPEG', quality=92)
+        img_io.seek(0)
+        return send_file(img_io, mimetype='image/jpeg')
+    except Exception as e:
+        logger.error(f"pdf_page error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@nas_bp.route('/api/save_doc', methods=['POST'])
+@require_auth
+def save_document():
+    """Save document from JSON payload (round-trip editing)."""
+    data = request.json
+    path = data.get('path', '')
+    full_path = resolve_path(path)
+    if not full_path.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+
+    ext = os.path.splitext(full_path)[1].lower()
+
+    try:
+        if ext == '.docx':
+            from docx import Document
+            doc = Document()
+            for para in data.get('content', []):
+                if isinstance(para, dict):
+                    doc.add_paragraph(para.get('text', ''))
+                else:
+                    doc.add_paragraph(str(para))
+            doc.save(full_path)
+            return jsonify({"success": True})
+
+        elif ext in ('.xls', '.xlsx'):
+            import openpyxl
+            wb = openpyxl.Workbook()
+            wb.remove(wb.active)
+            sheets_data = data.get('sheets', {})
+            for sheet_name, rows in sheets_data.items():
+                ws = wb.create_sheet(title=sheet_name[:31])  # Excel sheet name limit
+                for row in rows:
+                    ws.append(row)
+            wb.save(full_path)
+            return jsonify({"success": True})
+
+        elif ext == '.pptx':
+            from pptx import Presentation
+            from pptx.util import Inches
+            prs = Presentation()
+            for slide_data in data.get('slides', []):
+                slide_layout = prs.slide_layouts[6]  # blank
+                slide = prs.slides.add_slide(slide_layout)
+                for text in slide_data.get('texts', []):
+                    txBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(9), Inches(0.5))
+                    tf = txBox.text_frame
+                    tf.text = text
+            prs.save(full_path)
+            return jsonify({"success": True})
+
+        return jsonify({"error": f"Unsupported: {ext}"}), 400
+
+    except Exception as e:
+        logger.error(f"save_doc error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @nas_bp.route('/api/thumbnail')
 def get_thumbnail():
     path = request.args.get('path', '')

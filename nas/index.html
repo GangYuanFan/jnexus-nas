@@ -113,7 +113,78 @@
         .settings-select:hover { border-color: rgba(255,255,255,0.3); }
         #close-media { position: fixed; top: 1.5rem; right: 1.5rem; z-index: 9999; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.3); color: #fff; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 24px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
         #close-media:hover { background: rgba(255,255,255,0.15); }
-        
+
+        /* ===== DOCUMENT VIEWER CARD (PDF / Word / Excel / PPT) ===== */
+        #doc-overlay { display: none; position: fixed; inset: 0; z-index: 4000; background: rgba(5,5,10,0.9); backdrop-filter: blur(16px); padding: 0; }
+        .doc-card { width: 92%; height: 90%; max-width: 1300px; margin: 2.5vh auto; background: #13131e; border-radius: 24px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 60px -12px rgba(0,0,0,0.7); }
+        .doc-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.06); min-height: 56px; flex-shrink: 0; }
+        .doc-header .doc-title { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 10px; overflow: hidden; }
+        .doc-header .doc-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+        .doc-header .doc-type-badge { padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .doc-header .doc-type-badge.pdf-badge { background: rgba(255,50,50,0.15); color: #ff5252; }
+        .doc-header .doc-type-badge.word-badge { background: rgba(50,120,255,0.15); color: #4a8cff; }
+        .doc-header .doc-type-badge.excel-badge { background: rgba(50,200,100,0.15); color: #3dd68c; }
+        .doc-header .doc-type-badge.ppt-badge { background: rgba(255,120,50,0.15); color: #ff7843; }
+        .doc-header .doc-actions { display: flex; gap: 10px; }
+        .doc-header .doc-actions button { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #ccc; padding: 6px 16px; border-radius: 10px; font-size: 13px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+        .doc-header .doc-actions button:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); color: #fff; }
+        .doc-header .doc-actions button.doc-save-btn { background: rgba(100,200,255,0.1); border-color: rgba(100,200,255,0.2); color: #7accff; }
+        .doc-header .doc-actions button.doc-save-btn:hover { background: rgba(100,200,255,0.2); color: #fff; }
+        .doc-header .doc-actions button.doc-close-btn { background: rgba(255,80,80,0.1); border-color: rgba(255,80,80,0.15); color: #ff7979; }
+        .doc-header .doc-actions button.doc-close-btn:hover { background: rgba(255,80,80,0.2); color: #fff; }
+
+        /* Document body area */
+        .doc-body { flex: 1; overflow: auto; padding: 1.5rem; display: flex; flex-direction: column; }
+        .doc-body::-webkit-scrollbar { width: 6px; }
+        .doc-body::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .doc-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+        /* PDF specific */
+        .pdf-toolbar { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 0.8rem 1rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+        .pdf-toolbar button { background: rgba(255,255,255,0.08); border: none; color: #ddd; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 18px; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+        .pdf-toolbar button:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .pdf-toolbar button:disabled { opacity: 0.25; cursor: default; }
+        .pdf-toolbar .pdf-page-indicator { font-size: 13px; color: rgba(255,255,255,0.5); min-width: 100px; text-align: center; font-variant-numeric: tabular-nums; }
+        .pdf-toolbar .pdf-zoom { font-size: 13px; color: rgba(255,255,255,0.5); }
+        .pdf-viewer { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 1rem; background: rgba(0,0,0,0.3); }
+        .pdf-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); cursor: crosshair; }
+        .pdf-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.2); font-size: 14px; gap: 10px; }
+
+        /* Word specific */
+        .word-viewer { flex: 1; overflow: auto; padding: 1rem; }
+        .word-content { max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 2rem; min-height: 60vh; }
+        .word-content p { margin-bottom: 0.6rem; line-height: 1.7; font-size: 14px; color: rgba(255,255,255,0.8); }
+        .word-content .word-para { border-bottom: 1px solid rgba(255,255,255,0.03); padding: 0.5rem 0; }
+        .word-content textarea { width: 100%; min-height: 60vh; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #ddd; padding: 1rem; font-size: 14px; line-height: 1.6; resize: vertical; font-family: inherit; }
+        .word-content textarea:focus { outline: none; border-color: rgba(100,200,255,0.3); }
+
+        /* Excel specific */
+        .excel-viewer { flex: 1; overflow: auto; padding: 0; display: flex; flex-direction: column; }
+        .excel-sheet-tabs { display: flex; gap: 2px; padding: 0.5rem 1rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+        .excel-sheet-tab { padding: 4px 16px; font-size: 12px; color: rgba(255,255,255,0.4); cursor: pointer; border-radius: 6px 6px 0 0; transition: all 0.15s; border-bottom: 2px solid transparent; }
+        .excel-sheet-tab:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.04); }
+        .excel-sheet-tab.active { color: #4a8cff; border-bottom-color: #4a8cff; background: rgba(74,140,255,0.06); }
+        .excel-grid-wrap { flex: 1; overflow: auto; padding: 0; }
+        .excel-grid { border-collapse: collapse; width: max-content; min-width: 100%; }
+        .excel-grid td { border: 1px solid rgba(255,255,255,0.06); padding: 6px 12px; font-size: 13px; color: rgba(255,255,255,0.75); min-width: 80px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .excel-grid td:hover { background: rgba(255,255,255,0.03); }
+        .excel-grid td.excel-header { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.4); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .excel-grid td.excel-editing { padding: 0; }
+        .excel-grid td.excel-editing input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(100,200,255,0.4); color: #fff; padding: 5px 11px; font-size: 13px; outline: none; border-radius: 0; }
+        .excel-toolbar { display: flex; align-items: center; gap: 8px; padding: 0.5rem 1rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+        .excel-cell-info { font-size: 12px; color: rgba(255,255,255,0.3); min-width: 80px; font-variant-numeric: tabular-nums; }
+
+        /* PPT specific */
+        .ppt-viewer { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; overflow: auto; }
+        .ppt-slide { max-width: 800px; width: 100%; background: rgba(255,255,255,0.04); border-radius: 16px; padding: 2.5rem 3rem; min-height: 300px; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+        .ppt-slide-content { line-height: 1.8; }
+        .ppt-slide-content p { margin-bottom: 0.5rem; font-size: 14px; color: rgba(255,255,255,0.8); }
+        .ppt-nav { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 0.8rem; border-top: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+        .ppt-nav button { background: rgba(255,255,255,0.08); border: none; color: #ddd; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.1s; }
+        .ppt-nav button:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .ppt-nav button:disabled { opacity: 0.25; cursor: default; }
+        .ppt-nav .ppt-indicator { font-size: 13px; color: rgba(255,255,255,0.4); }
+
         /* Editor */
         #editor-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(5,5,10,0.92); backdrop-filter: blur(24px); padding: 1.5rem; }
         .editor-wrap { max-width: 1100px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; gap: 0.8rem; }
@@ -128,6 +199,14 @@
         .editor-head button:hover { background: rgba(255,255,255,0.12); color: #fff; }
         .editor-head .save-btn { background: #fff; color: #000; font-weight: 600; }
         .editor-head .save-btn:hover { background: #ddd; }
+        /* Upload Progress Bar */
+        .upload-progress-inner { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.8rem; }
+        .upload-progress-inner .flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+        .upload-progress-inner .text-xs { font-size: 12px; color: rgba(255,255,255,0.5); }
+        .upload-progress-inner .text-xs.font-bold { font-weight: 700; color: #fff; }
+        .upload-progress-inner .h-1\.5 { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+        .upload-progress-inner .h-full { height: 100%; background: linear-gradient(90deg, #4ade80, #3b82f6); border-radius: 3px; transition: width 0.15s ease; }
+
         #monaco-box { flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
         
         .loading { display: flex; justify-content: center; padding: 3rem; }
@@ -236,14 +315,16 @@
                 <label>☁️ Upload<input type="file" multiple hidden onchange="handleUpload(this)"></label>
                 <button onclick="toggleGrid()">🔲 Toggle View</button>
 
-            <!-- Upload Progress Bar -->
-            <div id="upload-progress-container" class="hidden mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
-                <div class="flex justify-between items-center mb-2">
-                    <span id="upload-filename" class="text-xs text-white/60 truncate max-w-[200px]">Uploading...</span>
-                    <span id="upload-percent" class="text-xs font-bold text-white">0%</span>
-                </div>
-                <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div id="upload-progress-bar" class="h-full bg-gradient-to-r from-green-400 to-blue-500 transition-all duration-200" style="width: 0%"></div>
+            <!-- Upload Progress Bar (hidden by default) -->
+            <div id="upload-progress-container" class="hidden-upload" style="display:none">
+                <div class="upload-progress-inner">
+                    <div class="flex justify-between items-center mb-2">
+                        <span id="upload-filename" class="text-xs text-white/60 truncate max-w-[200px]">Uploading...</span>
+                        <span id="upload-percent" class="text-xs font-bold text-white">0%</span>
+                    </div>
+                    <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div id="upload-progress-bar" class="h-full bg-gradient-to-r from-green-400 to-blue-500 transition-all duration-200" style="width: 0%"></div>
+                    </div>
                 </div>
             </div>
             </div>
@@ -278,7 +359,6 @@
         <div id="monaco-box"></div>
     </div>
 </div>
-</div>
 
 <!-- Media Player Overlay -->
 <div id="media-overlay">
@@ -312,6 +392,79 @@
                     </select>
                     <button class="ctrl-btn" onclick="toggleFullscreen()" title="Fullscreen" style="font-size:18px">⛶</button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Document Viewer Card (PDF / Word / Excel / PPT) -->
+<div id="doc-overlay">
+    <div class="doc-card">
+        <!-- Header -->
+        <div class="doc-header">
+            <div class="doc-title">
+                <span class="doc-type-badge" id="doc-type-badge">PDF</span>
+                <span id="doc-title-text">Loading...</span>
+            </div>
+            <div class="doc-actions">
+                <button id="doc-save-btn" class="doc-save-btn" onclick="saveDocCard()" style="display:none">💾 Save</button>
+                <button class="doc-close-btn" onclick="closeDocCard()">✕ Close</button>
+            </div>
+        </div>
+        
+        <!-- PDF Toolbar (shown in pdf mode) -->
+        <div id="pdf-toolbar" class="pdf-toolbar" style="display:none">
+            <button id="pdf-prev" onclick="pdfPrevPage()" disabled>◀</button>
+            <span class="pdf-page-indicator" id="pdf-page-indicator">Page 0 of 0</span>
+            <button id="pdf-next" onclick="pdfNextPage()" disabled>▶</button>
+            <span class="pdf-zoom" style="margin-left:1rem">🔍</span>
+            <button onclick="pdfZoomOut()">−</button>
+            <span class="pdf-zoom" id="pdf-zoom-level">100%</span>
+            <button onclick="pdfZoomIn()">+</button>
+        </div>
+
+        <!-- Excel toolbar (shown in excel mode) -->
+        <div id="excel-toolbar" class="excel-toolbar" style="display:none">
+            <span class="excel-cell-info" id="excel-cell-info">Click a cell</span>
+        </div>
+
+        <!-- Excel sheet tabs -->
+        <div id="excel-sheet-tabs" class="excel-sheet-tabs" style="display:none"></div>
+
+        <!-- PPT navigation -->
+        <div id="ppt-nav" class="ppt-nav" style="display:none">
+            <button id="ppt-prev" onclick="pptPrevSlide()" disabled>◀ Prev</button>
+            <span class="ppt-indicator" id="ppt-indicator">Slide 1 of 1</span>
+            <button id="ppt-next" onclick="pptNextSlide()" disabled>Next ▶</button>
+        </div>
+
+        <!-- Body / Content Area -->
+        <div class="doc-body" id="doc-body">
+            <div class="loading" id="doc-loading"><div class="spinner"></div></div>
+            
+            <!-- PDF viewer -->
+            <div id="pdf-viewer" class="pdf-viewer" style="display:none">
+                <div class="pdf-loading" id="pdf-loading"><div class="spinner"></div><span>Loading page...</span></div>
+                <img id="pdf-image" style="display:none" alt="PDF Page" ondblclick="closeDocCard()">
+            </div>
+            
+            <!-- Word viewer -->
+            <div id="word-viewer" class="word-viewer" style="display:none">
+                <div class="word-content" id="word-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Excel viewer -->
+            <div id="excel-viewer" class="excel-viewer" style="display:none">
+                <div class="excel-grid-wrap" id="excel-grid-wrap">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- PPT viewer -->
+            <div id="ppt-viewer" class="ppt-viewer" style="display:none">
+                <div class="loading" id="ppt-loading"><div class="spinner"></div></div>
             </div>
         </div>
     </div>
@@ -426,6 +579,34 @@ async function loadFiles(path, pushHist = true) {
     const grid = document.getElementById('file-grid');
     grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     renderBreadcrumb(path);
+    
+    // Add drag-and-drop upload to the file grid area
+    const mainArea = document.getElementById('main');
+    
+    // Remove old listeners by cloning - instead just ensure handler
+    const setupDrop = (el) => {
+        el.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.outline = '2px dashed rgba(100,200,255,0.3)';
+            this.style.outlineOffset = '-8px';
+        });
+        el.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.outline = 'none';
+        });
+        el.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.style.outline = 'none';
+            if (e.dataTransfer.files && e.dataTransfer.files.length) {
+                handleUpload(null, Array.from(e.dataTransfer.files));
+            }
+        });
+    };
+    setupDrop(mainArea);
+    
     if (pushHist) {
         histStack = histStack.slice(0, histIdx + 1);
         histStack.push(path);
@@ -497,7 +678,10 @@ function renderFiles(files) {
         entry.onclick = () => {
             if (f.is_dir) { loadFiles(fpath); return; }
             const ext = f.name.split('.').pop().toLowerCase();
-            if (ext === 'pdf') { openPdfViewer(fpath); return; }
+            if (ext === 'pdf') { openDocCard(fpath, 'pdf'); return; }
+            if (['doc','docx'].includes(ext)) { openDocCard(fpath, 'word'); return; }
+            if (['xls','xlsx'].includes(ext)) { openDocCard(fpath, 'excel'); return; }
+            if (['ppt','pptx'].includes(ext)) { openDocCard(fpath, 'powerpoint'); return; }
             if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) { openMediaPlayer(fpath, 'image'); return; }
             if (['mp4','mov','avi','mkv','webm'].includes(ext)) { openMediaPlayer(fpath, 'video'); return; }
             if (isEditable(f.name)) openEditor(fpath);
@@ -524,7 +708,16 @@ function ctxAction(action) {
     if (!ctxTarget) return;
     const { name, encPath, isDir } = ctxTarget;
     const path = decodeURIComponent(encPath);
-    if (action === 'edit') { if(!isDir && isEditable(name)) openEditor(path); }
+    if (action === 'edit') { 
+        if(!isDir) { 
+            const ext = name.split('.').pop().toLowerCase();
+            if (['doc','docx'].includes(ext)) { openDocCard(path, 'word'); return; }
+            if (['xls','xlsx'].includes(ext)) { openDocCard(path, 'excel'); return; }
+            if (['ppt','pptx'].includes(ext)) { openDocCard(path, 'powerpoint'); return; }
+            if (['pdf'].includes(ext)) { openDocCard(path, 'pdf'); return; }
+            if (isEditable(name)) openEditor(path); 
+        } 
+    }
     else if (action === 'download') { download(encPath); }
     else if (action === 'rename') {
         const nn = prompt('New name:', name);
@@ -562,13 +755,72 @@ async function createFolder() {
 async function handleUpload(input, files = null) {
     const targetFiles = files || (input.files ? Array.from(input.files) : []);
     if (!targetFiles.length) return;
-    for (let f of targetFiles) {
-        const fd = new FormData();
-        fd.append('file', f);
-        fd.append('path', currentPath);
-        await fetch('/nas/api/upload', { method:'POST', body:fd });
+    
+    const container = document.getElementById('upload-progress-container');
+    const filenameEl = document.getElementById('upload-filename');
+    const percentEl = document.getElementById('upload-percent');
+    const barEl = document.getElementById('upload-progress-bar');
+    
+    let uploaded = 0;
+    const total = targetFiles.length;
+    
+    try {
+        for (let i = 0; i < total; i++) {
+            const f = targetFiles[i];
+            filenameEl.textContent = f.name + (total > 1 ? ` (${i + 1}/${total})` : '');
+            container.style.display = 'block';
+            
+            await new Promise((resolve, reject) => {
+                const fd = new FormData();
+                fd.append('file', f);
+                fd.append('path', currentPath);
+                
+                const xhr = new XMLHttpRequest();
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        percentEl.textContent = pct + '%';
+                        barEl.style.width = pct + '%';
+                    }
+                };
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        percentEl.textContent = '100%';
+                        barEl.style.width = '100%';
+                        uploaded++;
+                        resolve();
+                    } else {
+                        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+                    }
+                };
+                xhr.onerror = function() { reject(new Error('Network error')); };
+                xhr.open('POST', '/nas/api/upload?password=' + encodeURIComponent(userPassword), true);
+                xhr.send(fd);
+            });
+        }
+        
+        // All done - hide progress after brief pause
+        setTimeout(() => {
+            container.style.display = 'none';
+            percentEl.textContent = '0%';
+            barEl.style.width = '0%';
+            filenameEl.textContent = 'Uploading...';
+        }, 800);
+        
+        refresh();
+    } catch (e) {
+        console.error('Upload error:', e);
+        filenameEl.textContent = '❌ ' + e.message;
+        percentEl.textContent = 'FAIL';
+        barEl.style.width = '0%';
+        barEl.style.background = 'linear-gradient(90deg, #ff4444, #ff6b6b)';
+        setTimeout(() => {
+            container.style.display = 'none';
+            barEl.style.background = 'linear-gradient(90deg, #4ade80, #3b82f6)';
+            filenameEl.textContent = 'Uploading...';
+            percentEl.textContent = '0%';
+        }, 3000);
     }
-    refresh();
 }
 function isEditable(name) {
     return ['txt','py','md','json','html','css','js','yml','yaml','log','sh'].includes(name.split('.').pop().toLowerCase());
@@ -607,17 +859,6 @@ async function openEditor(path) {
             document.getElementById('btn-save').onclick = saveFile;
         }, 80);
     } catch(e) { alert('Error: ' + e.message); }
-}
-
-function openPdfViewer(path) {
-    const overlay = document.getElementById('media-overlay');
-    overlay.style.display = 'flex';
-    const viewport = document.getElementById('media-viewport');
-    viewport.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
-    iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
-    viewport.appendChild(iframe);
 }
 
 function openMediaPlayer(path, type) {
@@ -703,4 +944,398 @@ async function saveFile() {
         if (d.success) { alert('Saved!'); closeEditor(); }
     } catch(e) { alert('Error: ' + e.message); }
 }
+
+// ====== DOCUMENT VIEWER CARD FUNCTIONS ======
+
+let docState = { type: null, path: null, data: null };
+
+// PDF state
+let pdfState = { page: 0, total: 0, scale: 1.5, path: null };
+
+// Excel state
+let excelState = { sheets: {}, activeSheet: null, sheetNames: [], path: null, originalData: {} };
+
+// PPT state
+let pptState = { slide: 0, total: 0, slides: [] };
+
+function closeDocCard() {
+    document.getElementById('doc-overlay').style.display = 'none';
+    docState = { type: null, path: null, data: null };
+    hideAllDocViews();
+    pdfState = { page: 0, total: 0, scale: 1.5, path: null };
+    pptState = { slide: 0, total: 0, slides: [] };
+}
+
+function hideAllDocViews() {
+    ['pdf-viewer','word-viewer','excel-viewer','ppt-viewer'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+    ['pdf-toolbar','excel-toolbar','excel-sheet-tabs','ppt-nav'].forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+    document.getElementById('doc-save-btn').style.display = 'none';
+}
+
+// ====== MAIN ENTRY POINT ======
+
+function openDocCard(path, docType) {
+    docState.path = path;
+    docState.type = docType;
+    
+    const overlay = document.getElementById('doc-overlay');
+    overlay.style.display = 'block';
+    
+    hideAllDocViews();
+    document.getElementById('doc-loading').style.display = 'flex';
+    document.getElementById('doc-title-text').textContent = path.split('/').pop();
+    
+    // Set badge
+    const badge = document.getElementById('doc-type-badge');
+    badge.className = 'doc-type-badge ' + docType + '-badge';
+    badge.textContent = docType.toUpperCase();
+    
+    apiFetch('/nas/api/read_doc?path=' + encodeURIComponent(path))
+        .then(r => r.json())
+        .then(data => {
+            docState.data = data;
+            document.getElementById('doc-loading').style.display = 'none';
+            
+            if (docType === 'pdf') renderPdfDoc(data);
+            else if (docType === 'word') renderWordDoc(data);
+            else if (docType === 'excel') renderExcelDoc(data);
+            else if (docType === 'powerpoint') renderPptDoc(data);
+        })
+        .catch(e => {
+            document.getElementById('doc-body').innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">Error: ' + e.message + '</div>';
+        });
+}
+
+// ====== PDF VIEWER ======
+
+function renderPdfDoc(data) {
+    document.getElementById('pdf-viewer').style.display = 'flex';
+    document.getElementById('pdf-toolbar').style.display = 'flex';
+    document.getElementById('doc-save-btn').style.display = 'none';
+    
+    pdfState.page = 0;
+    pdfState.total = data.pageCount || 1;
+    pdfState.path = data.filepath;
+    pdfState.scale = 1.5;
+    
+    document.getElementById('pdf-image').style.display = 'none';
+    document.getElementById('pdf-loading').style.display = 'flex';
+    
+    loadPdfPage(0);
+}
+
+function loadPdfPage(pageNum) {
+    if (!pdfState.path) return;
+    pdfState.page = Math.max(0, Math.min(pageNum, pdfState.total - 1));
+    
+    const img = document.getElementById('pdf-image');
+    const loading = document.getElementById('pdf-loading');
+    
+    img.style.display = 'none';
+    loading.style.display = 'flex';
+    
+    const scale = pdfState.scale;
+    const url = '/nas/api/pdf_page?path=' + encodeURIComponent(pdfState.path) + '&page=' + pdfState.page + '&scale=' + scale + '&password=' + userPassword;
+    
+    img.onload = function() {
+        img.style.display = 'block';
+        loading.style.display = 'none';
+        updatePdfControls();
+    };
+    img.onerror = function() {
+        loading.innerHTML = '<span style="opacity:0.3">Failed to load page ' + (pdfState.page + 1) + '</span>';
+    };
+    img.src = url + '&t=' + Date.now();
+}
+
+function updatePdfControls() {
+    document.getElementById('pdf-page-indicator').textContent = 'Page ' + (pdfState.page + 1) + ' of ' + pdfState.total;
+    document.getElementById('pdf-prev').disabled = (pdfState.page <= 0);
+    document.getElementById('pdf-next').disabled = (pdfState.page >= pdfState.total - 1);
+    document.getElementById('pdf-zoom-level').textContent = Math.round(pdfState.scale / 1.5 * 100) + '%';
+}
+
+function pdfPrevPage() { loadPdfPage(pdfState.page - 1); }
+function pdfNextPage() { loadPdfPage(pdfState.page + 1); }
+function pdfZoomIn() { pdfState.scale = Math.min(5.0, pdfState.scale + 0.3); loadPdfPage(pdfState.page); }
+function pdfZoomOut() { pdfState.scale = Math.max(0.5, pdfState.scale - 0.3); loadPdfPage(pdfState.page); }
+
+// Keyboard shortcuts for PDF
+function pdfHandleKey(e) {
+    if (docState.type !== 'pdf') return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        if (pdfState.page < pdfState.total - 1) pdfNextPage();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (pdfState.page > 0) pdfPrevPage();
+    } else if (e.key === 'Escape') {
+        closeDocCard();
+    }
+}
+
+// ====== WORD DOCUMENT VIEWER/EDITOR ======
+
+let wordEditing = false;
+
+function renderWordDoc(data) {
+    document.getElementById('word-viewer').style.display = 'block';
+    document.getElementById('doc-save-btn').style.display = 'inline-block';
+    wordEditing = false;
+    
+    const container = document.getElementById('word-content');
+    const paras = data.content || [];
+    
+    let html = '<div style="margin-bottom:1rem;display:flex;gap:8px">';
+    html += '<button onclick="toggleWordEdit()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#ccc;padding:4px 12px;border-radius:8px;font-size:12px;cursor:pointer">✏️ Edit</button>';
+    html += '<span style="font-size:12px;color:rgba(255,255,255,0.3);align-self:center">' + paras.length + ' paragraphs</span>';
+    html += '</div>';
+    
+    if (paras.length === 0) {
+        html += '<div style="opacity:0.3;text-align:center;padding:2rem">Empty document</div>';
+    } else {
+        html += '<div id="word-para-list">';
+        paras.forEach((p, i) => {
+            const text = typeof p === 'string' ? p : (p.text || '');
+            html += '<div class="word-para">' + escapeHtml(text) + '</div>';
+        });
+        html += '</div>';
+    }
+    
+    // Hidden textarea for editing
+    html += '<textarea id="word-edit-area" style="display:none" rows="20"></textarea>';
+    
+    container.innerHTML = html;
+    
+    // Store original text in textarea
+    const allText = paras.map(p => typeof p === 'string' ? p : (p.text || '')).join('\n');
+    document.getElementById('word-edit-area').value = allText;
+}
+
+function toggleWordEdit() {
+    wordEditing = !wordEditing;
+    const listEl = document.getElementById('word-para-list');
+    const editArea = document.getElementById('word-edit-area');
+    
+    if (wordEditing) {
+        listEl.style.display = 'none';
+        editArea.style.display = 'block';
+        document.querySelector('#word-content button').textContent = '👁️ Preview';
+        document.getElementById('doc-save-btn').style.display = 'inline-block';
+    } else {
+        listEl.style.display = 'block';
+        editArea.style.display = 'none';
+        document.querySelector('#word-content button').textContent = '✏️ Edit';
+    }
+}
+
+// ====== EXCEL VIEWER/EDITOR ======
+
+let excelEditing = { active: false, sheet: null, row: -1, col: -1 };
+
+function renderExcelDoc(data) {
+    document.getElementById('excel-viewer').style.display = 'flex';
+    document.getElementById('excel-toolbar').style.display = 'flex';
+    document.getElementById('excel-sheet-tabs').style.display = 'flex';
+    document.getElementById('doc-save-btn').style.display = 'inline-block';
+    
+    excelState.path = data.filepath;
+    excelState.sheets = data.sheets || {};
+    excelState.sheetNames = data.sheetNames || [];
+    excelState.activeSheet = data.activeSheet || (excelState.sheetNames[0] || '');
+    
+    // Render sheet tabs
+    const tabsEl = document.getElementById('excel-sheet-tabs');
+    tabsEl.innerHTML = '';
+    excelState.sheetNames.forEach(name => {
+        const tab = document.createElement('span');
+        tab.className = 'excel-sheet-tab' + (name === excelState.activeSheet ? ' active' : '');
+        tab.textContent = name;
+        tab.onclick = () => switchExcelSheet(name);
+        tabsEl.appendChild(tab);
+    });
+    
+    renderExcelSheet(excelState.activeSheet);
+}
+
+function switchExcelSheet(name) {
+    excelState.activeSheet = name;
+    document.querySelectorAll('.excel-sheet-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.excel-sheet-tab').forEach(t => {
+        if (t.textContent === name) t.classList.add('active');
+    });
+    renderExcelSheet(name);
+}
+
+function renderExcelSheet(name) {
+    const wrap = document.getElementById('excel-grid-wrap');
+    const rows = excelState.sheets[name] || [];
+    
+    if (rows.length === 0) {
+        wrap.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty sheet</div>';
+        return;
+    }
+    
+    let html = '<table class="excel-grid" id="excel-grid"><tbody>';
+    rows.forEach((row, ri) => {
+        html += '<tr>';
+        row.forEach((cell, ci) => {
+            const isFirstRow = ri === 0;
+            const cls = isFirstRow ? ' excel-header' : '';
+            html += '<td class="excel-cell' + cls + '" data-r="' + ri + '" data-c="' + ci + '" onclick="excelEditCell(this,' + ri + ',' + ci + ')">' + escapeHtml(cell) + '</td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+}
+
+function excelEditCell(td, r, c) {
+    // If already editing same cell, don't re-init
+    if (excelEditing.active && excelEditing.row === r && excelEditing.col === c) return;
+    
+    // Finish previous edit
+    excelFinishEditing();
+    
+    const currentVal = td.textContent;
+    td.innerHTML = '<input type="text" value="' + escapeHtml(currentVal) + '" onblur="excelFinishEditing()" onkeydown="if(event.key===\'Enter\')excelFinishEditing()" autofocus>';
+    td.className = 'excel-cell excel-editing';
+    
+    excelEditing = { active: true, sheet: excelState.activeSheet, row: r, col: c };
+    document.getElementById('excel-cell-info').textContent = 'Cell ' + String.fromCharCode(65 + c) + (r + 1);
+    
+    // Select all text in input
+    const input = td.querySelector('input');
+    if (input) { input.focus(); input.select(); }
+}
+
+function excelFinishEditing() {
+    if (!excelEditing.active) return;
+    
+    const input = document.querySelector('.excel-editing input');
+    if (input) {
+        const val = input.value;
+        const sheet = excelEditing.sheet;
+        const r = excelEditing.row;
+        const c = excelEditing.col;
+        
+        if (excelState.sheets[sheet] && excelState.sheets[sheet][r]) {
+            excelState.sheets[sheet][r][c] = val;
+        }
+        
+        // Re-render just this cell
+        const td = input.parentElement;
+        td.innerHTML = escapeHtml(val);
+        td.className = 'excel-cell' + (r === 0 ? ' excel-header' : '');
+    }
+    
+    excelEditing = { active: false, sheet: null, row: -1, col: -1 };
+}
+
+// ====== PPT VIEWER ======
+
+function renderPptDoc(data) {
+    document.getElementById('ppt-viewer').style.display = 'flex';
+    document.getElementById('ppt-nav').style.display = 'flex';
+    document.getElementById('doc-save-btn').style.display = 'none';
+    document.getElementById('ppt-loading').style.display = 'none';
+    
+    pptState.slides = data.slides || [];
+    pptState.total = data.slideCount || pptState.slides.length;
+    pptState.slide = 0;
+    
+    renderPptSlide(0);
+}
+
+function renderPptSlide(idx) {
+    pptState.slide = Math.max(0, Math.min(idx, pptState.total - 1));
+    const viewer = document.getElementById('ppt-viewer');
+    
+    if (pptState.slides.length === 0) {
+        viewer.innerHTML = '<div style="opacity:0.3">Empty presentation</div>';
+        return;
+    }
+    
+    const slide = pptState.slides[pptState.slide];
+    const texts = slide.texts || [];
+    
+    let html = '<div class="ppt-slide"><div class="ppt-slide-content">';
+    if (texts.length === 0) {
+        html += '<p style="opacity:0.3">(Empty slide)</p>';
+    } else {
+        texts.forEach(t => {
+            html += '<p>' + escapeHtml(t) + '</p>';
+        });
+    }
+    html += '</div></div>';
+    
+    viewer.innerHTML = html;
+    
+    document.getElementById('ppt-indicator').textContent = 'Slide ' + (pptState.slide + 1) + ' of ' + pptState.total;
+    document.getElementById('ppt-prev').disabled = (pptState.slide <= 0);
+    document.getElementById('ppt-next').disabled = (pptState.slide >= pptState.total - 1);
+}
+
+function pptPrevSlide() { renderPptSlide(pptState.slide - 1); }
+function pptNextSlide() { renderPptSlide(pptState.slide + 1); }
+
+// ====== SAVE DOCUMENT ======
+
+async function saveDocCard() {
+    if (!docState.path) return;
+    
+    let payload = { path: docState.path };
+    
+    if (docState.type === 'word') {
+        // Save from textarea or original content
+        if (wordEditing) {
+            const text = document.getElementById('word-edit-area').value;
+            const lines = text.split('\n').filter(l => l.trim());
+            payload.content = lines.map(l => ({ text: l, style: 'Normal' }));
+        } else {
+            payload.content = docState.data.content;
+        }
+    } else if (docState.type === 'excel') {
+        payload.sheets = excelState.sheets;
+    } else {
+        return; // PDF and PPT are read-only
+    }
+    
+    try {
+        const r = await apiFetch('/nas/api/save_doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.success) {
+            alert('✅ Saved!');
+        } else {
+            alert('❌ Error: ' + (d.error || 'Unknown'));
+        }
+    } catch(e) {
+        alert('❌ Error: ' + e.message);
+    }
+}
+
+// ====== KEYBOARD SHORTCUTS ======
+
+document.addEventListener('keydown', function(e) {
+    if (document.getElementById('doc-overlay').style.display === 'block') {
+        pdfHandleKey(e);
+    }
+});
+
+// ====== UTILITY ======
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text || '';
+    return d.innerHTML;
+}
+
 </script>
