@@ -525,7 +525,7 @@ function goBack() { if(histIdx>0) { histIdx--; loadFiles(histStack[histIdx],fals
 function goForward() { if(histIdx<histStack.length-1) { histIdx++; loadFiles(histStack[histIdx],false); } }
 function goUp() { if(!currentPath) return; const p=currentPath.split('/'); p.pop(); loadFiles(p.join('/')); }
 function refresh() { loadFiles(currentPath); }
-function download(ep) { window.location.href = '/nas/api/download?path=' + ep; }
+function download(ep) { window.location.href = '/nas/api/download?path=' + ep + '&password=' + userPassword; }
 function updateNav() {
     document.getElementById('btn-back').disabled = histIdx <= 0;
     document.getElementById('btn-forward').disabled = histIdx >= histStack.length - 1;
