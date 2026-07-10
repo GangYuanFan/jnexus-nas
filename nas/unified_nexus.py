@@ -1,13 +1,7 @@
 import logging
 import argparse
-
-logging.basicConfig(
-    filename='nas_server_debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    encoding='utf-8'
-)
-
+import sys
+import os
 import requests
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect
 from flask_cors import CORS
@@ -15,8 +9,15 @@ from dotenv import load_dotenv
 import psutil
 import platform
 import time
-import os
 from pathlib import Path
+
+# Setup logging
+logging.basicConfig(
+    filename='nas_server_debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8'
+)
 
 load_dotenv()
 
@@ -24,10 +25,20 @@ app = Flask(__name__)
 CORS(app)
 app.json.sort_keys = False
 
-# --- CONFIG ---
-ROOT_DIR = '/home/jerry/workspace'
-THUMB_DIR = '/tmp/nas_thumbnails'
+# --- DYNAMIC CONFIG ---
+# Determine if we are running as a PyInstaller bundle
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+    # On Windows, use a temporary directory for thumbnails
+    THUMB_DIR = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'nas_thumbnails')
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    THUMB_DIR = '/tmp/nas_thumbnails'
+
 os.makedirs(THUMB_DIR, exist_ok=True)
+
+# Default ROOT_DIR (will be overridden by CLI args)
+ROOT_DIR = '/home/jerry/workspace'
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
@@ -38,7 +49,11 @@ nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
 
 @nas_bp.route('/')
 def serve_nas_index():
-    return send_from_directory('/home/jerry/workspace/nas_tool/nas', 'index.html')
+    # The HTML files are bundled in the 'nas' folder relative to the executable
+    # If frozen, look in BASE_DIR/nas/index.html
+    # If not frozen, look in current_dir/nas/index.html
+    frontend_path = os.path.join(BASE_DIR, 'nas')
+    return send_from_directory(frontend_path, 'index.html')
 
 @nas_bp.route('/api/sysinfo')
 def system_info():
@@ -237,4 +252,11 @@ def redirect_to_nas():
     return redirect('/nas/', code=301)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', default='/home/jerry/workspace')
+    parser.add_argument('--port', type=int, default=8000)
+    parser.add_argument('--password', default='JERRY_NEXUS_2026')
+    args = parser.parse_args()
+    
+    ROOT_DIR = args.root
+    app.run(host='0.0.0.0', port=args.port)
