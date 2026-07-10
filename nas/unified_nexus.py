@@ -193,8 +193,8 @@ def get_thumbnail():
             import subprocess
             result = subprocess.run(
                 ['ffmpeg', '-i', full_path, '-ss', '00:00:01', '-vframes', '1',
-                 '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
-                capture_output=True, timeout=15
+                 '-vf', 'scale=200:-1', '-q:v', '5', '-update', '1', '-y', thumb_path],
+                capture_output=True, timeout=30
             )
             if result.returncode == 0 and os.path.exists(thumb_path):
                 return send_file(thumb_path, mimetype='image/jpeg')
