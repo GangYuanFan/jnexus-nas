@@ -1,10 +1,11 @@
-import multiprocessing
+import threading
 import logging
 import sys
 import os
 import webbrowser
+import requests
 
-# Force PyInstaller bundle - all needed dependencies
+# Force PyInstaller bundle
 import requests
 import flask
 import flask_cors
@@ -27,16 +28,16 @@ logging.basicConfig(
 )
 
 def run_nas_server(root, password, port):
-    # This function runs the Flask server in a separate process.
+    # This function runs the Flask server in a separate thread.
     try:
-        # Import the app and the init function inside the process
+        # Import the app and the init function inside the thread
         from nas.unified_nexus import app, init_app
         init_app(root, password, port)
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
         try:
             with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
-                f.write('SERVER CRASHED: ' + str(e) + '\n')
+                f.write('SERVER CRASHED: ' + str(e) + '\\n')
         except:
             pass
 
@@ -49,7 +50,8 @@ class NasGui(QMainWindow):
         # Use a generic system icon
         self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
-        self.server_process = None
+        self.server_thread = None
+        self.current_port = None
 
         # Main Widget
         central_widget = QWidget()
@@ -123,22 +125,25 @@ class NasGui(QMainWindow):
     def start_server(self):
         root = self.root_input.text().strip()
         password = self.pass_input.text().strip()
-        port = self.port_input.text().strip()
+        port_str = self.port_input.text().strip()
 
-        if not root or not password or not port.isdigit():
+        if not root or not password or not port_str.isdigit():
             QMessageBox.warning(self, "Error", "Please specify valid root, password, and numeric port.")
             return
+
+        port = int(port_str)
+        self.current_port = port
 
         try:
             logging.debug(f"Attempting to start server: root={root}, port={port}")
             
-            # Launch server in a separate process
-            self.server_process = multiprocessing.Process(
+            # Launch server in a daemon thread
+            self.server_thread = threading.Thread(
                 target=run_nas_server, 
-                args=(root, password, int(port)),
+                args=(root, password, port),
                 daemon=True
             )
-            self.server_process.start()
+            self.server_thread.start()
             
             # Update UI Status
             self.status_label.setText(f"Status: Running (Port {port})")
@@ -147,18 +152,20 @@ class NasGui(QMainWindow):
             self.root_input.setEnabled(False)
             self.pass_input.setEnabled(False)
             self.port_input.setEnabled(False)
-            logging.info(f"Server process started with PID {self.server_process.pid}")
+            logging.info(f"Server thread started (Port {port})")
 
         except Exception as e:
             logging.error(f"Failed to start server: {str(e)}")
             QMessageBox.critical(self, "Execution Error", f"Failed to start server: {str(e)}")
 
     def stop_server(self):
-        if self.server_process and self.server_process.is_alive():
-            logging.debug("Stopping server process...")
-            self.server_process.terminate()
-            self.server_process.join(timeout=2)
-            logging.info("Server process stopped.")
+        if self.current_port:
+            logging.debug(f"Requesting server shutdown on port {self.current_port}")
+            try:
+                # Call the shutdown API to kill the server process
+                requests.post(f"http://localhost:{self.current_port}/nas/api/shutdown", timeout=2)
+            except Exception as e:
+                logging.error(f"Shutdown request failed: {str(e)}")
         
         # Reset UI Status
         self.status_label.setText("Status: Stopped")
@@ -167,6 +174,7 @@ class NasGui(QMainWindow):
         self.root_input.setEnabled(True)
         self.pass_input.setEnabled(True)
         self.port_input.setEnabled(True)
+        self.current_port = None
 
     def open_browser(self):
         port = self.port_input.text().strip()

@@ -3,6 +3,7 @@ import argparse
 import sys
 import os
 import requests
+import signal
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -41,7 +42,7 @@ def init_app(root, password, port):
     NAS_PASSWORD = password
     THUMB_DIR = os.path.join(os.environ.get('TEMP', '/tmp'), 'nas_thumbnails')
     os.makedirs(THUMB_DIR, exist_ok=True)
-    logging.info(f"Server initialized: ROOT={ROOT_DIR}, THUMB_DIR={THUMB_DIR}")
+    logging.info(f"Server initialized: ROOT={ROOT_DIR}, PASS=*** PORT={port}")
 
 # --- NAS BLUEPRINT ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
@@ -55,59 +56,25 @@ def verify_password():
 
 @nas_bp.before_request
 def check_auth():
-    # Protect all API calls, but allow index.html and debug_paths for diagnostics
+    # Protect all API calls
     if request.endpoint and request.endpoint.startswith('api_'):
         if not verify_password():
             return jsonify({"error": "Invalid Password"}), 403
 
 @nas_bp.route('/')
 def serve_nas_index():
-    # --- SMART PATH SEARCH ---
-    # 1. Try PyInstaller bundle root
     if getattr(sys, 'frozen', False):
-        search_root = sys._MEIPASS
-        # Look for index.html in root or in 'nas' folder
-        possible_paths = [
-            os.path.join(search_root, 'nas'),
-            search_root
-        ]
-        for p in possible_paths:
-            if os.path.exists(os.path.join(p, 'index.html')):
-                logging.debug(f"Found index.html at: {p}")
-                return send_from_directory(p, 'index.html')
-    
-    # 2. Try development mode (current file dir)
-    dev_path = os.path.dirname(os.path.abspath(__file__))
-    if os.path.exists(os.path.join(dev_path, 'index.html')):
-        logging.debug(f"Found index.html at: {dev_path}")
-        return send_from_directory(dev_path, 'index.html')
-    
-    # 3. Fallback: scan for index.html in the whole bundle
-    if getattr(sys, 'frozen', False):
-        for root, dirs, files in os.walk(sys._MEIPASS):
-            if 'index.html' in files:
-                logging.debug(f"Fallback found index.html at: {root}")
-                return send_from_directory(root, 'index.html')
-
-    logging.error("CRITICAL: index.html NOT FOUND in any expected location!")
-    return "Error: index.html not found. Please check logs.", 404
-
-@nas_bp.route('/debug_paths')
-def debug_paths():
-    \"\"\"Diagnostic route to list all files in the bundle.\"\"\"
-    files_list = []
-    if getattr(sys, 'frozen', False):
-        for root, dirs, files in os.walk(sys._MEIPASS):
-            for f in files:
-                files_list.append(os.path.join(root, f))
+        frontend_path = os.path.join(sys._MEIPASS, 'nas')
     else:
-        files_list = [os.path.abspath(__file__)]
-    
-    return jsonify({
-        "sys_meipass": getattr(sys, '_MEIPASS', 'Not Frozen'),
-        "root_dir": ROOT_DIR,
-        "files": files_list
-    })
+        frontend_path = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(frontend_path, 'index.html')
+
+@nas_bp.route('/api/shutdown', methods=['POST'])
+def api_shutdown():
+    \"\"\"Kill the server process immediately.\"\"\"
+    logging.info("Shutdown request received via API.")
+    os.kill(os.getpid(), signal.SIGTERM)
+    return jsonify({"success": True})
 
 @nas_bp.route('/api/root')
 def api_root():
@@ -298,7 +265,7 @@ def api_thumbnail():
                 pass
     except Exception:
         pass
-    icon_map = {'jpg':'337943', 'jpeg':'337943', 'png':'337943', 'gif':'337943', 'webp':'337943', 'svg':'337943', 'mp4':'1179067', 'mov':'1179067', 'avi':'1179067', 'mkv':'1179067', 'webm':'1179067', 'mp3':'461261', 'wav':'461261', 'm4a':'461261', 'aac':'461261', 'flac':'461261', 'pdf':'105354', 'doc':'105351', 'docx':'105351', 'xls':'105352', 'xlsx':'105352', 'ppt':'105353', 'pptx':'105353', 'py':'1055644', 'js':'1055644', 'html':'1055644', 'css':'1055644', 'json':'1055644', 'md':'1055644', 'txt':'1055644', 'log':'1055644', 'sh':'1055644', 'zip':'2961218', 'tar':'2961218', 'gz':'2961218', 'rar':'2961218'}
+    icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
     icon_id = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
     return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_id}.png', code=302)
 
