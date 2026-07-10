@@ -327,7 +327,7 @@
 </div>
 
 
-<script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '';
+<script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
 const ROOT = '/home/jerry/workspace';
 let userPassword = '';
 
@@ -631,6 +631,8 @@ function openMediaPlayer(path, type) {
         img.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
         img.className = 'media-content zoom-fit';
         viewport.appendChild(img);
+        activeMedia = img;
+        document.getElementById('media-controls').style.display = 'none';
     } else if (type === 'video') {
         const video = document.createElement('video');
         video.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
@@ -638,7 +640,56 @@ function openMediaPlayer(path, type) {
         video.autoplay = true;
         video.className = 'media-content zoom-fit';
         viewport.appendChild(video);
+        activeMedia = video;
+        document.getElementById('media-controls').style.display = 'flex';
+        
+        video.ontimeupdate = () => {
+            const current = video.currentTime;
+            const total = video.duration;
+            document.getElementById('media-time-current').textContent = formatTime(current);
+            document.getElementById('media-time-total').textContent = formatTime(total);
+            document.getElementById('media-progress-fill').style.width = (current / total * 100) + '%';
+        };
     }
+}
+
+function closeMediaPlayer() {
+    document.getElementById('media-overlay').style.display = 'none';
+    if (activeMedia && activeMedia.pause) activeMedia.pause();
+    activeMedia = null;
+}
+
+function formatTime(sec) {
+    if (isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function togglePlay() {
+    if (!activeMedia) return;
+    if (activeMedia.paused) activeMedia.play(); else activeMedia.pause();
+    document.getElementById('btn-play-pause').textContent = activeMedia.paused ? '▶️' : '⏸️';
+}
+
+function rewindMedia() { if(activeMedia) activeMedia.currentTime -= 10; }
+function fastForwardMedia() { if(activeMedia) activeMedia.currentTime += 10; }
+function changeSpeed(val) { if(activeMedia) activeMedia.playbackRate = parseFloat(val); }
+function changeZoom(val) {
+    if (!activeMedia) return;
+    activeMedia.className = 'media-content ' + val;
+}
+function toggleFullscreen() {
+    const el = document.getElementById('media-container');
+    if (!document.fullscreenElement) el.requestFullscreen();
+    else document.exitFullscreen();
+}
+function seekMedia(e) {
+    if (!activeMedia) return;
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    activeMedia.currentTime = pct * activeMedia.duration;
 }
 
 function closeEditor() { document.getElementById('editor-overlay').style.display = 'none'; }
