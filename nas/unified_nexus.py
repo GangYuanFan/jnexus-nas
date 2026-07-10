@@ -1,4 +1,5 @@
 import requests
+import logging
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -6,7 +7,13 @@ import psutil
 import platform
 import time
 import os
+import sys
 from pathlib import Path
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', 
+                    stream=sys.stdout)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -16,19 +23,21 @@ app.json.sort_keys = False
 
 # --- CONFIG ---
 ROOT_DIR = '/home/jerry/workspace'
-THUMB_DIR = '/tmp/nas_thumbnails'
+THUMB_DIR = os.path.join(ROOT_DIR, '.nas_thumbnails')
 os.makedirs(THUMB_DIR, exist_ok=True)
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
 VID_EXTS = {'.mp4','.mov','.avi','.mkv','.webm'}
+DOC_EXTS = {'.doc','.docx','.xls','.xlsx','.ppt','.pptx'}
 
 # --- NAS BLUEPRINT (Handles /nas prefix) ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
 
 @nas_bp.route('/')
 def serve_nas_index():
-    return send_from_directory('/home/jerry/workspace/nas', 'index.html')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(current_dir, 'index.html')
 
 @nas_bp.route('/api/sysinfo')
 def system_info():
@@ -179,6 +188,7 @@ def get_thumbnail():
         if ext in IMG_EXTS:
             from PIL import Image, ImageOps
             img = Image.open(full_path)
+            img = ImageOps.exif_transpose(img)
             img.thumbnail((200, 200), Image.LANCZOS)
             if img.mode in ('RGBA', 'LA', 'P'):
                 bg = Image.new('RGB', img.size, (30, 30, 40))
@@ -191,29 +201,31 @@ def get_thumbnail():
             return send_file(thumb_path, mimetype='image/jpeg')
         if ext in VID_EXTS:
             import subprocess
+            import shutil
+            ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
             try:
-                result = subprocess.run(
-                    ['ffmpeg', '-i', full_path, '-ss', '00:00:01', '-vframes', '1',
-                     '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
-                    capture_output=True, timeout=30
-                )
-            except subprocess.TimeoutExpired:
-                result = None
-            if result and result.returncode == 0 and os.path.exists(thumb_path):
-                return send_file(thumb_path, mimetype='image/jpeg')
-            # Fallback: try with first frame
-            try:
-                result2 = subprocess.run(
-                    ['ffmpeg', '-i', full_path, '-ss', '00:00:00', '-vframes', '1',
-                     '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
-                    capture_output=True, timeout=30
-                )
-                if result2.returncode == 0 and os.path.exists(thumb_path):
-                    return send_file(thumb_path, mimetype='image/jpeg')
-            except:
+                for timestamp in ['00:00:01', '00:00:00']:
+                    result = subprocess.run(
+                        [ffmpeg_bin, '-loglevel', 'error', '-i', full_path, '-ss', timestamp, '-vframes', '1',
+                         '-vf', 'scale=200:-1', '-q:v', '5', '-update', '1', '-y', thumb_path],
+                        capture_output=True, timeout=15
+                    )
+                    if result.returncode == 0 and os.path.exists(thumb_path):
+                        return send_file(thumb_path, mimetype='image/jpeg')
+            except Exception as e:
+                logger.error(f"Video thumb error: {e}")
                 pass
-    except Exception:
+    except Exception as e:
+        logger.error(f"General thumb error: {e}")
         pass
+    
+    # Special case for Word icon - Priority: Custom File -> Modern CDN -> Generic Map
+    if ext in {'.doc', '.docx'}:
+        custom_word_icon = os.path.join(ROOT_DIR, 'nas_tool/nas/icons/word_custom.png')
+        if os.path.exists(custom_word_icon):
+            return send_file(custom_word_icon, mimetype='image/png')
+        return redirect('https://cdn-icons-png.flaticon.com/512/732/732220.png', code=302)
+
     icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
     icon_id = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
     return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_id}.png', code=302)
