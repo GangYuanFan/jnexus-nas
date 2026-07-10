@@ -8,6 +8,8 @@ import platform
 import time
 import os
 import sys
+import io
+import threading
 from pathlib import Path
 from functools import wraps
 
@@ -205,10 +207,14 @@ def download_file():
 
 @nas_bp.route('/api/shutdown', methods=['POST'])
 def shutdown_server():
-    import os
-    import logging
-    logging.getLogger(__name__).info('Shutdown request received.')
-    os._exit(0)
+    logging.getLogger(__name__).info('Shutdown request received. Scheduling exit...')
+    
+    def exit_process():
+        time.sleep(1) # Give Flask time to send the response
+        os._exit(0)
+        
+    threading.Thread(target=exit_process).start()
+    return jsonify({"success": True, "message": "Server shutting down..."})
 
 @nas_bp.route('/api/view')
 @require_auth
