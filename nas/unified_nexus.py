@@ -25,34 +25,38 @@ app = Flask(__name__)
 CORS(app)
 app.json.sort_keys = False
 
-# --- DYNAMIC CONFIG ---
-# Determine if we are running as a PyInstaller bundle
-if getattr(sys, 'frozen', False):
-    BASE_DIR = sys._MEIPASS
-    # On Windows, use a temporary directory for thumbnails
-    THUMB_DIR = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'nas_thumbnails')
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    THUMB_DIR = '/tmp/nas_thumbnails'
-
-os.makedirs(THUMB_DIR, exist_ok=True)
-
-# Default ROOT_DIR (will be overridden by CLI args)
-ROOT_DIR = '/home/jerry/workspace'
+# --- GLOBAL CONFIG (initialized via init_app) ---
+ROOT_DIR = '/tmp' 
+THUMB_DIR = '/tmp/nas_thumbnails'
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
 VID_EXTS = {'.mp4','.mov','.avi','.mkv','.webm'}
 
-# --- NAS BLUEPRINT (Handles /nas prefix) ---
+def init_app(root, password, port):
+    \"\"\"Initialize server configuration from GUI arguments.\"\"\"
+    global ROOT_DIR, THUMB_DIR
+    ROOT_DIR = os.path.abspath(root)
+    # Use system temp dir for thumbnails to avoid permission issues
+    THUMB_DIR = os.path.join(os.environ.get('TEMP', '/tmp'), 'nas_thumbnails')
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    logging.info(f"Server initialized with ROOT_DIR={ROOT_DIR}, THUMB_DIR={THUMB_DIR}")
+
+# --- NAS BLUEPRINT ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
 
 @nas_bp.route('/')
 def serve_nas_index():
-    # The HTML files are bundled in the 'nas' folder relative to the executable
-    # If frozen, look in BASE_DIR/nas/index.html
-    # If not frozen, look in current_dir/nas/index.html
-    frontend_path = os.path.join(BASE_DIR, 'nas')
+    # Precise path detection for bundled vs dev mode
+    if getattr(sys, 'frozen', False):
+        # In PyInstaller bundle: index.html is in sys._MEIPASS/nas/index.html
+        frontend_path = os.path.join(sys._MEIPASS, 'nas')
+    else:
+        # In dev mode: this file is in .../nas/unified_nexus.py
+        # index.html is in the same directory
+        frontend_path = os.path.dirname(os.path.abspath(__file__))
+    
+    logging.debug(f"Serving index.html from: {frontend_path}")
     return send_from_directory(frontend_path, 'index.html')
 
 @nas_bp.route('/api/sysinfo')
@@ -258,5 +262,5 @@ if __name__ == '__main__':
     parser.add_argument('--password', default='JERRY_NEXUS_2026')
     args = parser.parse_args()
     
-    ROOT_DIR = args.root
+    init_app(args.root, args.password, args.port)
     app.run(host='0.0.0.0', port=args.port)

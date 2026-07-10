@@ -40,6 +40,12 @@ logging.basicConfig(
 )
 
 def run_nas_server(root, password, port):
+    try:
+        # Import the app and the init function inside the process
+        from nas.unified_nexus import app, init_app
+        init_app(root, password, port)
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
     # Wrapper function to run the Flask server in a separate process.
     try:
         # Import inside the process to ensure it uses the bundled environment
