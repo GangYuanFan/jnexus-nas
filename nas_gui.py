@@ -2,15 +2,14 @@ import multiprocessing
 import logging
 import sys
 import os
-import subprocess
 import webbrowser
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QFileDialog, QMessageBox, QStyle)
-from PySide6.QtCore import Qt, QProcess
+from PySide6.QtCore import Qt
 from PySide6 import QtGui
 
-
+# Setup GUI Debug Logging
 logging.basicConfig(
     filename='nas_gui_debug.log',
     level=logging.DEBUG,
@@ -18,32 +17,29 @@ logging.basicConfig(
     encoding='utf-8'
 )
 
-
 def run_nas_server(root, password, port):
+    \"\"\"Wrapper function to run the Flask server in a separate process.\"\"\"
     try:
-        # Import the app inside the process to avoid Flask context issues
+        # Import inside the process to ensure it uses the bundled environment
         from nas.unified_nexus import app
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
         try:
             with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
-                f.write('CRASH: ' + str(e) + '
-')
+                f.write('SERVER CRASHED: ' + str(e) + '\n')
         except:
             pass
+
 class NasGui(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("J.NAS Server Controller")
         self.setFixedSize(500, 300)
         
-        # Set Window Icon
-        # To use a custom icon, place 'icon.ico' in the same folder and use:
-        # self.setWindowIcon(QtGui.QIcon('icon.ico'))
-        # For now, using a generic system icon
+        # Use a generic system icon
         self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
-        self.process = None
+        self.server_process = None
 
         # Main Widget
         central_widget = QWidget()
@@ -124,60 +120,43 @@ class NasGui(QMainWindow):
             return
 
         try:
-            if getattr(sys, 'frozen', False):
-                base_path = sys._MEIPASS
-                script_path = os.path.join(base_path, 'nas', 'unified_nexus.py')
-            else:
-                script_path = os.path.join(os.path.dirname(__file__), 'nas', 'unified_nexus.py')
-
-            self.server_process = None
-            self.process.setProcessChannelMode(QProcess.MergedChannels)
-            self.process.started.connect(self.on_server_started)
-            self.process.finished.connect(self.on_server_stopped)
+            logging.debug(f"Attempting to start server: root={root}, port={port}")
             
-            
-            
-            
-
-            self.server_process = multiprocessing.Process(target=run_nas_server, args=(root, password, port))
+            # Launch server in a separate process
+            self.server_process = multiprocessing.Process(
+                target=run_nas_server, 
+                args=(root, password, int(port)),
+                daemon=True
+            )
             self.server_process.start()
             
+            # Update UI Status
+            self.status_label.setText(f"Status: Running (Port {port})")
+            self.start_btn.setEnabled(False)
+            self.stop_btn.setEnabled(True)
+            self.root_input.setEnabled(False)
+            self.pass_input.setEnabled(False)
+            self.port_input.setEnabled(False)
+            logging.info(f"Server process started with PID {self.server_process.pid}")
+
         except Exception as e:
+            logging.error(f"Failed to start server: {str(e)}")
             QMessageBox.critical(self, "Execution Error", f"Failed to start server: {str(e)}")
 
-    def on_server_started(self):
-        port = self.port_input.text().strip()
-        self.status_label.setText(f"Status: Running (Port {port})")
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        self.root_input.setEnabled(False)
-        self.pass_input.setEnabled(False)
-        self.port_input.setEnabled(False)
-
-    def on_server_stopped(self):
+    def stop_server(self):
+        if self.server_process and self.server_process.is_alive():
+            logging.debug("Stopping server process...")
+            self.server_process.terminate()
+            self.server_process.join(timeout=2)
+            logging.info("Server process stopped.")
+        
+        # Reset UI Status
         self.status_label.setText("Status: Stopped")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.root_input.setEnabled(True)
         self.pass_input.setEnabled(True)
         self.port_input.setEnabled(True)
-
-    
-    def handle_stdout(self):
-        data = self.process.readAllStandardOutput().data().decode('utf-8', errors='replace')
-        logging.debug(f'STDOUT: {data.strip()}')
-
-    def handle_stderr(self):
-        data = self.process.readAllStandardError().data().decode('utf-8', errors='replace')
-        logging.error(f'STDERR: {data.strip()}')
-
-
-    def stop_server(self):
-        if self.process:
-            if self.server_process:
-            self.server_process.terminate()
-            self.server_process.join()
-            self.process.kill()
 
     def open_browser(self):
         port = self.port_input.text().strip()
@@ -187,7 +166,9 @@ class NasGui(QMainWindow):
         webbrowser.open(f"http://localhost:{port}/nas/")
 
 if __name__ == "__main__":
+    # CRITICAL for PyInstaller bundled apps
     multiprocessing.freeze_support()
+    
     app = QApplication(sys.argv)
     window = NasGui()
     window.show()
