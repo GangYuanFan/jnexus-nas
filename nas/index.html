@@ -476,6 +476,51 @@ function getFileIcon(name, isDir) {
     return map[ext] || 'https://cdn-icons-png.flaticon.com/512/2961/2961222.png';
 }
 
+
+function getFileIcon(name, isDir) {
+    if (isDir) return 'https://cdn-icons-png.flaticon.com/512/716/716784.png';
+    var ext = name.split('.').pop().toLowerCase();
+    var icons = {
+        'jpg':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'jpeg':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'png':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'gif':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'webp':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'svg':'https://cdn-icons-png.flaticon.com/512/337/337943.png',
+        'mp4':'https://cdn-icons-png.flaticon.com/512/1179/1179067.png',
+        'mov':'https://cdn-icons-png.flaticon.com/512/1179/1179067.png',
+        'avi':'https://cdn-icons-png.flaticon.com/512/1179/1179067.png',
+        'mkv':'https://cdn-icons-png.flaticon.com/512/1179/1179067.png',
+        'webm':'https://cdn-icons-png.flaticon.com/512/1179/1179067.png',
+        'mp3':'https://cdn-icons-png.flaticon.com/512/461/461261.png',
+        'wav':'https://cdn-icons-png.flaticon.com/512/461/461261.png',
+        'm4a':'https://cdn-icons-png.flaticon.com/512/461/461261.png',
+        'aac':'https://cdn-icons-png.flaticon.com/512/461/461261.png',
+        'flac':'https://cdn-icons-png.flaticon.com/512/461/461261.png',
+        'pdf':'https://cdn-icons-png.flaticon.com/512/337/337946.png',
+        'doc':'https://cdn-icons-png.flaticon.com/512/732/732220.png',
+        'docx':'https://cdn-icons-png.flaticon.com/512/732/732220.png',
+        'xls':'https://cdn-icons-png.flaticon.com/512/732/732222.png',
+        'xlsx':'https://cdn-icons-png.flaticon.com/512/732/732222.png',
+        'ppt':'https://cdn-icons-png.flaticon.com/512/732/732225.png',
+        'pptx':'https://cdn-icons-png.flaticon.com/512/732/732225.png',
+        'py':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'js':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'html':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'css':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'json':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'md':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'txt':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'log':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'sh':'https://cdn-icons-png.flaticon.com/512/1055/1055644.png',
+        'zip':'https://cdn-icons-png.flaticon.com/512/2961/2961218.png',
+        'tar':'https://cdn-icons-png.flaticon.com/512/2961/2961218.png',
+        'gz':'https://cdn-icons-png.flaticon.com/512/2961/2961218.png',
+        'rar':'https://cdn-icons-png.flaticon.com/512/2961/2961218.png',
+    };
+    return icons[ext] || 'https://cdn-icons-png.flaticon.com/512/2961/2961222.png';
+}
+
 function renderFiles(files) {
     const grid = document.getElementById('file-grid');
     if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
