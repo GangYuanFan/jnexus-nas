@@ -282,9 +282,26 @@ def get_thumbnail():
         return redirect('https://cdn-icons-png.flaticon.com/512/732220.png', code=302)
 
     # 4. Generic Fallback Icons
-    icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
-    icon_id = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
-    return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_id}.png', code=302)
+    icon_map = {
+        'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943',
+        'mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067',
+        'mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261',
+        'pdf':'337946',
+        'doc':'https://cdn-icons-png.flaticon.com/512/732/732220.png',
+        'docx':'https://cdn-icons-png.flaticon.com/512/732/732220.png',
+        'xls':'https://cdn-icons-png.flaticon.com/512/732/732222.png',
+        'xlsx':'https://cdn-icons-png.flaticon.com/512/732/732222.png',
+        'ppt':'https://cdn-icons-png.flaticon.com/512/732/732225.png',
+        'pptx':'https://cdn-icons-png.flaticon.com/512/732/732225.png',
+        'py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644',
+        'md':'1055644','txt':'1055644','log':'1055644','sh':'1055644',
+        'zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'
+    }
+    
+    icon_val = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
+    if icon_val.startswith('http'):
+        return redirect(icon_val, code=302)
+    return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_val}.png', code=302)
 
 app.register_blueprint(nas_bp)
 
