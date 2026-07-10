@@ -1,3 +1,4 @@
+import multiprocessing
 import logging
 import sys
 import os
@@ -16,6 +17,18 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     encoding='utf-8'
 )
+
+
+def run_nas_server(root, password, port):
+    try:
+        # Import the app inside the process to avoid Flask context issues
+        from nas.unified_nexus import app
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    except Exception as e:
+        with open('nas_server_crash.log', 'a') as f:
+            f.write(f'CRASH: {str(e)}
+')
+
 
 class NasGui(QMainWindow):
     def __init__(self):
@@ -116,16 +129,17 @@ class NasGui(QMainWindow):
             else:
                 script_path = os.path.join(os.path.dirname(__file__), 'nas', 'unified_nexus.py')
 
-            self.process = QProcess()
+            self.server_process = None
             self.process.setProcessChannelMode(QProcess.MergedChannels)
             self.process.started.connect(self.on_server_started)
             self.process.finished.connect(self.on_server_stopped)
             
             
-            self.process.readyReadStandardOutput.connect(self.handle_stdout)
-            self.process.readyReadStandardError.connect(self.handle_stderr)
+            
+            
 
-            self.process.start('python', [script_path, '--root', root, '--password', password, '--port', port])
+            self.server_process = multiprocessing.Process(target=run_nas_server, args=(root, password, port))
+            self.server_process.start()
             
         except Exception as e:
             QMessageBox.critical(self, "Execution Error", f"Failed to start server: {str(e)}")
@@ -159,7 +173,9 @@ class NasGui(QMainWindow):
 
     def stop_server(self):
         if self.process:
-            self.process.terminate()
+            if self.server_process:
+            self.server_process.terminate()
+            self.server_process.join()
             self.process.kill()
 
     def open_browser(self):
@@ -170,6 +186,7 @@ class NasGui(QMainWindow):
         webbrowser.open(f"http://localhost:{port}/nas/")
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QApplication(sys.argv)
     window = NasGui()
     window.show()
