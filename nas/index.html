@@ -893,7 +893,7 @@ async function openEditor(path) {
         
         setTimeout(() => {
             const ext = path.split('.').pop().toLowerCase();
-            const langMap = { py:'python', md:'markdown', json:'json', html:'html', css:'css', js:'javascript', yml:'yaml', yaml:'yaml', sh:'shell', txt:'plaintext', cpp:'cpp', h:'cpp', c:'c', hpp:'cpp', cc:'cpp' };
+            const langMap = { py:'python', md:'markdown', json:'json', html:'html', css:'css', js:'javascript', yml:'yaml', yaml:'yaml', sh:'shell', txt:'plaintext', cpp:'cpp', h:'cpp', c:'c', hpp:'cpp', cc:'cpp' ,java:"https://cdn-icons-png.flaticon.com/512/5968/5968363.png",go:"https://cdn-icons-png.flaticon.com/512/5968/5968364.png",rs:"https://cdn-icons-png.flaticon.com/512/5968/5968365.png",ts:"https://cdn-icons-png.flaticon.com/512/5968/5968293.png",tsx:"https://cdn-icons-png.flaticon.com/512/5968/5968293.png",php:"https://cdn-icons-png.flaticon.com/512/5968/5968366.png",rb:"https://cdn-icons-png.flaticon.com/512/5968/5968367.png",swift:"https://cdn-icons-png.flaticon.com/512/5968/5968368.png",kt:"https://cdn-icons-png.flaticon.com/512/5968/5968369.png",sql:"https://cdn-icons-png.flaticon.com/512/2962/2962412.png"};
             editor = monaco.editor.create(box, {
                 value: content, language: langMap[ext] || 'plaintext', theme: 'vs-dark',
                 automaticLayout: true, fontSize: 14, fontFamily: 'Fira Code, monospace',
