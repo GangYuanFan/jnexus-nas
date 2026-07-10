@@ -12,19 +12,6 @@ import dotenv
 import psutil
 import PIL
 
-# Force PyInstaller bundle
-import requests
-import flask
-import flask_cors
-import dotenv
-import psutil
-import PIL
-# Force PyInstaller to bundle these dependencies
-import requests
-import flask
-import flask_cors
-import dotenv
-import PIL
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QFileDialog, QMessageBox, QStyle)
@@ -40,16 +27,11 @@ logging.basicConfig(
 )
 
 def run_nas_server(root, password, port):
+    \"\"\"Wrapper function to run the Flask server in a separate process.\"\"\"
     try:
         # Import the app and the init function inside the process
         from nas.unified_nexus import app, init_app
         init_app(root, password, port)
-        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-    # Wrapper function to run the Flask server in a separate process.
-    try:
-        # Import inside the process to ensure it uses the bundled environment
-        from nas.unified_nexus import app
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
         try:
