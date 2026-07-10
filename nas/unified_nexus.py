@@ -177,7 +177,7 @@ def get_thumbnail():
             return send_file(thumb_path, mimetype='image/jpeg')
     try:
         if ext in IMG_EXTS:
-            from PIL import Image
+            from PIL import Image, ImageOps
             img = Image.open(full_path)
             img.thumbnail((200, 200), Image.LANCZOS)
             if img.mode in ('RGBA', 'LA', 'P'):
@@ -191,13 +191,27 @@ def get_thumbnail():
             return send_file(thumb_path, mimetype='image/jpeg')
         if ext in VID_EXTS:
             import subprocess
-            result = subprocess.run(
-                ['ffmpeg', '-i', full_path, '-ss', '00:00:01', '-vframes', '1',
-                 '-vf', 'scale=200:-1', '-q:v', '5', '-update', '1', '-y', thumb_path],
-                capture_output=True, timeout=30
-            )
-            if result.returncode == 0 and os.path.exists(thumb_path):
+            try:
+                result = subprocess.run(
+                    ['ffmpeg', '-i', full_path, '-ss', '00:00:01', '-vframes', '1',
+                     '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
+                    capture_output=True, timeout=30
+                )
+            except subprocess.TimeoutExpired:
+                result = None
+            if result and result.returncode == 0 and os.path.exists(thumb_path):
                 return send_file(thumb_path, mimetype='image/jpeg')
+            # Fallback: try with first frame
+            try:
+                result2 = subprocess.run(
+                    ['ffmpeg', '-i', full_path, '-ss', '00:00:00', '-vframes', '1',
+                     '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
+                    capture_output=True, timeout=30
+                )
+                if result2.returncode == 0 and os.path.exists(thumb_path):
+                    return send_file(thumb_path, mimetype='image/jpeg')
+            except:
+                pass
     except Exception:
         pass
     icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
