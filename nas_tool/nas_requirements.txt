@@ -1,0 +1,5 @@
+# Requirements for Nas GUI Tool
+# Install these on the Windows PC before building
+flask
+pyside6
+pillow
