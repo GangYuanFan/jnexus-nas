@@ -5,10 +5,10 @@ if exist dist rd /s /q dist
 
 echo [2/4] Ensuring dependencies are installed...
 python -m pip install --upgrade pip
-python -m pip install requests flask flask-cors Pillow PySide6
+python -m pip install requests flask flask-cors python-dotenv Pillow PySide6
 
 echo [3/4] Packaging Nas Tool...
-python -m PyInstaller --noconfirm --onefile --windowed --add-data "nas;nas" --hidden-import requests --hidden-import flask --hidden-import PIL --hidden-import flask_cors --hidden-import nas.unified_nexus nas_gui.py
+python -m PyInstaller --noconfirm --onefile --windowed --add-data "nas;nas" --hidden-import requests --hidden-import flask --hidden-import PIL --hidden-import flask_cors --hidden-import dotenv --hidden-import nas.unified_nexus nas_gui.py
 
 echo [4/4] Done! Your executable is in the dist folder.
 pause

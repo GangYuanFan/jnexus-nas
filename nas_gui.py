@@ -7,6 +7,7 @@ import webbrowser
 import requests
 import flask
 import flask_cors
+import dotenv
 import PIL
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
