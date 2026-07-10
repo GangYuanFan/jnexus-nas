@@ -1,6 +1,6 @@
 import requests
 import logging
-from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect
+from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 import psutil
@@ -234,6 +234,7 @@ def get_thumbnail():
     ext = os.path.splitext(full_path)[1].lower()
     
     try:
+        # 1. Image Thumbnails (Pure Memory)
         if ext in IMG_EXTS:
             from PIL import Image, ImageOps
             img = Image.open(full_path)
@@ -249,18 +250,38 @@ def get_thumbnail():
             
             img_io = io.BytesIO()
             img.save(img_io, 'JPEG', quality=75)
-            img_io.seek(0)
-            return send_file(img_io, mimetype='image/jpeg')
+            return Response(img_io.getvalue(), mimetype='image/jpeg')
+
+        # 2. Video Thumbnails (Pure Memory via Pipe)
+        if ext in VID_EXTS:
+            import subprocess
+            ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
+            try:
+                # Try to capture a frame from 1s in, then 0s
+                for timestamp in ['00:00:01', '00:00:00']:
+                    cmd = [
+                        ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
+                        '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
+                        '-vcodec', 'mjpeg', '-vf', 'scale=200:-1', '-'
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, timeout=10)
+                    if result.returncode == 0 and result.stdout:
+                        return Response(result.stdout, mimetype='image/jpeg')
+            except Exception as ve:
+                logger.error(f"Video pipe error: {ve}")
+
     except Exception as e:
-        logger.error(f"Image thumb error: {e}")
+        logger.error(f"General thumb error: {e}")
         pass
 
+    # 3. Special Document Icons
     if ext in {'.doc', '.docx'}:
         custom_word_icon = os.path.join(ROOT_DIR, 'nas_tool/nas/icons/word_custom.png')
         if os.path.exists(custom_word_icon):
             return send_file(custom_word_icon, mimetype='image/png')
         return redirect('https://cdn-icons-png.flaticon.com/512/732/732220.png', code=302)
 
+    # 4. Generic Fallback Icons
     icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
     icon_id = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
     return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_id}.png', code=302)
