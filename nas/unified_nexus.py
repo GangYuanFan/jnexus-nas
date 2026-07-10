@@ -28,7 +28,7 @@ app.json.sort_keys = False
 # --- GLOBAL CONFIG ---
 ROOT_DIR = '/tmp' 
 THUMB_DIR = '/tmp/nas_thumbnails'
-NAS_PASSWORD = 'JERRY_NEXUS_2026'
+NAS_PASSWORD = '***'
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
@@ -41,7 +41,7 @@ def init_app(root, password, port):
     NAS_PASSWORD = password
     THUMB_DIR = os.path.join(os.environ.get('TEMP', '/tmp'), 'nas_thumbnails')
     os.makedirs(THUMB_DIR, exist_ok=True)
-    logging.info(f"Server initialized: ROOT={ROOT_DIR}, PASS={NAS_PASSWORD}, PORT={port}")
+    logging.info(f"Server initialized: ROOT={ROOT_DIR}, THUMB_DIR={THUMB_DIR}")
 
 # --- NAS BLUEPRINT ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
@@ -55,21 +55,62 @@ def verify_password():
 
 @nas_bp.before_request
 def check_auth():
-    # Allow access to index.html without password, but protect all API calls
+    # Protect all API calls, but allow index.html and debug_paths for diagnostics
     if request.endpoint and request.endpoint.startswith('api_'):
         if not verify_password():
             return jsonify({"error": "Invalid Password"}), 403
 
 @nas_bp.route('/')
 def serve_nas_index():
+    # --- SMART PATH SEARCH ---
+    # 1. Try PyInstaller bundle root
     if getattr(sys, 'frozen', False):
-        frontend_path = os.path.join(sys._MEIPASS, 'nas')
+        search_root = sys._MEIPASS
+        # Look for index.html in root or in 'nas' folder
+        possible_paths = [
+            os.path.join(search_root, 'nas'),
+            search_root
+        ]
+        for p in possible_paths:
+            if os.path.exists(os.path.join(p, 'index.html')):
+                logging.debug(f"Found index.html at: {p}")
+                return send_from_directory(p, 'index.html')
+    
+    # 2. Try development mode (current file dir)
+    dev_path = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(dev_path, 'index.html')):
+        logging.debug(f"Found index.html at: {dev_path}")
+        return send_from_directory(dev_path, 'index.html')
+    
+    # 3. Fallback: scan for index.html in the whole bundle
+    if getattr(sys, 'frozen', False):
+        for root, dirs, files in os.walk(sys._MEIPASS):
+            if 'index.html' in files:
+                logging.debug(f"Fallback found index.html at: {root}")
+                return send_from_directory(root, 'index.html')
+
+    logging.error("CRITICAL: index.html NOT FOUND in any expected location!")
+    return "Error: index.html not found. Please check logs.", 404
+
+@nas_bp.route('/debug_paths')
+def debug_paths():
+    \"\"\"Diagnostic route to list all files in the bundle.\"\"\"
+    files_list = []
+    if getattr(sys, 'frozen', False):
+        for root, dirs, files in os.walk(sys._MEIPASS):
+            for f in files:
+                files_list.append(os.path.join(root, f))
     else:
-        frontend_path = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(frontend_path, 'index.html')
+        files_list = [os.path.abspath(__file__)]
+    
+    return jsonify({
+        "sys_meipass": getattr(sys, '_MEIPASS', 'Not Frozen'),
+        "root_dir": ROOT_DIR,
+        "files": files_list
+    })
 
 @nas_bp.route('/api/root')
-def get_root():
+def api_root():
     return jsonify({"root": ROOT_DIR})
 
 @nas_bp.route('/api/sysinfo')
