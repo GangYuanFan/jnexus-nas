@@ -4,7 +4,7 @@ import sys
 import os
 import webbrowser
 
-# Force PyInstaller bundle
+# Force PyInstaller bundle - all needed dependencies
 import requests
 import flask
 import flask_cors
@@ -27,7 +27,7 @@ logging.basicConfig(
 )
 
 def run_nas_server(root, password, port):
-    \"\"\"Wrapper function to run the Flask server in a separate process.\"\"\"
+    # This function runs the Flask server in a separate process.
     try:
         # Import the app and the init function inside the process
         from nas.unified_nexus import app, init_app
@@ -36,7 +36,7 @@ def run_nas_server(root, password, port):
     except Exception as e:
         try:
             with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
-                f.write('SERVER CRASHED: ' + str(e) + '\\n')
+                f.write('SERVER CRASHED: ' + str(e) + '\n')
         except:
             pass
 
