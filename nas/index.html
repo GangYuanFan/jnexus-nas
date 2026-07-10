@@ -615,7 +615,7 @@ function openPdfViewer(path) {
     const viewport = document.getElementById('media-viewport');
     viewport.innerHTML = '';
     const iframe = document.createElement('iframe');
-    iframe.src = '/nas/api/view?path=' + encodeURIComponent(path);
+    iframe.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
     iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
     viewport.appendChild(iframe);
 }
@@ -628,12 +628,12 @@ function openMediaPlayer(path, type) {
     
     if (type === 'image') {
         const img = document.createElement('img');
-        img.src = '/nas/api/view?path=' + encodeURIComponent(path);
+        img.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
         img.className = 'media-content zoom-fit';
         viewport.appendChild(img);
     } else if (type === 'video') {
         const video = document.createElement('video');
-        video.src = '/nas/api/view?path=' + encodeURIComponent(path);
+        video.src = '/nas/api/view?path=' + encodeURIComponent(path) + '&password=' + userPassword;
         video.controls = true;
         video.autoplay = true;
         video.className = 'media-content zoom-fit';
