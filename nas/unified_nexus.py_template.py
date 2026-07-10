@@ -45,14 +45,7 @@ def resolve_path(path):
     elif os.path.isabs(path) and path.startswith(ROOT_DIR):
         res = os.path.normpath(path)
     else:
-        # Handle potential Windows-style absolute paths from GUI
-        clean_path = path
-        if ':' in path:
-            parts = path.split(':', 1)
-            if len(parts) == 2:
-                clean_path = parts[1].lstrip('\\/')
-        
-        res = os.path.normpath(os.path.join(ROOT_DIR, clean_path.lstrip('/')))
+        res = os.path.normpath(os.path.join(ROOT_DIR, path.lstrip('/')))
     logger.info(f'[PATH-DEBUG] Resolved to: "{res}"')
     return res
 

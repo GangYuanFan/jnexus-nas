@@ -4,50 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JERRY'S NAS | DSM Mobile</title>
-    <script src="https://cdn.tailwindcss.com">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
-</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
-</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
-</script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
-</script>
+    
+    
+    
+    
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -186,17 +146,7 @@ async function updateRootDisplay() {
             #sidebar-close { display: flex; position: absolute; top: 0.6rem; right: 0.6rem; background: rgba(255,255,255,0.04); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
-</script>
+    
 </head>
 <body>
 
@@ -369,51 +319,63 @@ async function updateRootDisplay() {
     <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js">
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
+
+<script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '';
+const ROOT = '/home/jerry/workspace';
+let userPassword = '';
+
+function checkAuth() {
+    const k = document.getElementById('access-key').value;
+    fetch('/nas/api/auth', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: k})
+    }).then(r => r.json()).then(d => {
+        if (d.success) {
+            userPassword = k;
+            document.getElementById('auth-overlay').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('auth-overlay').style.display = 'none';
+                document.getElementById('app').style.display = 'flex';
+                loadFiles('', true);
+                loadDashboard();
+            }, 400);
+        } else {
+            throw new Error(d.error || 'Invalid key');
+        }
+    }).catch(e => {
+        const errEl = document.getElementById('auth-err');
+        errEl.textContent = e.message || 'Invalid key. Try again.';
+        errEl.style.opacity = '1';
+        setTimeout(() => errEl.style.opacity = '0', 2000);
+    });
 }
 
-    updateRootDisplay();
-</script>
-<script>
-let currentPath = "", sortMode = "name", sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = "";
-const ROOT = "/home/jerry/workspace";
+function apiFetch(url, options = {}) {
+    const urlObj = new URL(url, window.location.origin);
+    urlObj.searchParams.append('password', userPassword);
+    if (options.method === 'POST' && options.body) {
+        try {
+            const body = JSON.parse(options.body);
+            body.password = userPassword;
+            options.body = JSON.stringify(body);
+        } catch (e) {}
+    }
+    return fetch(urlObj.toString(), options);
+}
+
+document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
 
 window.addEventListener('click', e => {
     document.getElementById('ctx-menu').style.display = 'none';
 });
 
-/* Auth */
-function checkAuth() {
-    const k = document.getElementById('access-key').value;
-    if (k === "JERRY_NEXUS_2026") {
-        document.getElementById('auth-overlay').style.opacity = '0';
-        setTimeout(() => {
-            document.getElementById('auth-overlay').style.display = 'none';
-            document.getElementById('app').style.display = 'flex';
-            loadFiles("", true);
-            loadDashboard();
-        }, 400);
-    } else {
-        const e = document.getElementById('auth-err');
-        e.style.opacity = '1';
-        setTimeout(() => e.style.opacity = '0', 2000);
-    }
-}
-document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
-
-/* Sidebar */
 function switchPage(name) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const page = document.getElementById('page-' + name);
     if (page) page.classList.add('active');
-    const navItem = document.querySelector(`.nav-item[data-page="${name}"]`);
+    const navItem = document.querySelector('.nav-item[data-page="' + name + '"]');
     if (navItem) navItem.classList.add('active');
     if (name === 'dashboard') loadDashboard();
     if (name === 'system') loadSystemInfo();
@@ -422,10 +384,9 @@ function switchPage(name) {
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
 function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
 
-/* Dashboard */
 async function loadDashboard() {
     try {
-        const r = await fetch('/nas/api/sysinfo');
+        const r = await apiFetch('/nas/api/sysinfo');
         const d = await r.json();
         document.getElementById('dash-cpu').textContent = d.cpu_percent.toFixed(1) + '%';
         document.getElementById('dash-cpu-bar').style.width = d.cpu_percent + '%';
@@ -436,46 +397,36 @@ async function loadDashboard() {
         document.getElementById('dash-disk-detail').textContent = 'of ' + (d.disk.total_gb).toFixed(1) + ' GB';
         document.getElementById('dash-disk-bar').style.width = d.disk.percent + '%';
         document.getElementById('dash-uptime').textContent = d.uptime_human;
-    } catch(e) {
-        console.log("Dashboard load error:", e);
-    }
+    } catch(e) { console.log('Dashboard load error:', e); }
 }
 
-/* System Info */
 async function loadSystemInfo() {
     const el = document.getElementById('sys-content');
     try {
-        const r = await fetch('/nas/api/sysinfo');
+        const r = await apiFetch('/nas/api/sysinfo');
         const d = await r.json();
-        el.innerHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="card"><div class="label">CPU</div><div class="value">${d.cpu_count} cores</div><div class="sub">${d.cpu_percent.toFixed(1)}% utilized</div></div>
-                <div class="card"><div class="label">Platform</div><div class="value" style="font-size:1.2rem">${d.platform}</div><div class="sub">${d.hostname}</div></div>
-                <div class="card"><div class="label">Memory</div><div class="value">${(d.memory.total_gb).toFixed(1)} GB</div><div class="sub">${(d.memory.used_gb).toFixed(1)} GB used</div></div>
-                <div class="card"><div class="label">Disk</div><div class="value">${(d.disk.total_gb).toFixed(1)} GB</div><div class="sub">${(d.disk.used_gb).toFixed(1)} GB used</div></div>
-            </div>
-        `;
-    } catch(e) {
-        el.innerHTML = '<div class="card">Failed to load system info.</div>';
-    }
+        el.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+            '<div class="card"><div class="label">CPU</div><div class="value">' + d.cpu_count + ' cores</div><div class="sub">' + d.cpu_percent.toFixed(1) + '% utilized</div></div>' +
+            '<div class="card"><div class="label">Platform</div><div class="value" style="font-size:1.2rem">' + d.platform + '</div><div class="sub">' + d.hostname + '</div></div>' +
+            '<div class="card"><div class="label">Memory</div><div class="value">' + (d.memory.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (d.memory.used_gb).toFixed(1) + ' GB used</div></div>' +
+            '<div class="card"><div class="label">Disk</div><div class="value">' + (d.disk.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (d.disk.used_gb).toFixed(1) + ' GB used</div></div>' +
+            '</div>';
+    } catch(e) { el.innerHTML = '<div class="card">Failed to load system info.</div>'; }
 }
 
-/* File Manager */
 async function loadFiles(path, pushHist = true) {
     currentPath = path;
     const grid = document.getElementById('file-grid');
     grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     renderBreadcrumb(path);
-    
     if (pushHist) {
         histStack = histStack.slice(0, histIdx + 1);
         histStack.push(path);
         histIdx++;
     }
     updateNav();
-    
     try {
-        const r = await fetch(`/nas/api/files?path=${encodeURIComponent(path)}`);
+        const r = await apiFetch('/nas/api/files?path=' + encodeURIComponent(path));
         allFiles = await r.json();
         renderFiles(allFiles);
     } catch(e) { grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">Error loading files</div>'; }
@@ -497,36 +448,27 @@ function renderBreadcrumb(path) {
     });
 }
 
-
 function getFileIcon(n, d, fp) {
-    if (d) return "https://cdn-icons-png.flaticon.com/512/716/716784.png";
-    if (n.includes('_icon') || (fp && fp.includes('/icons/'))) {
-        return "https://cdn-icons-png.flaticon.com/512/337/337943.png";
-    }
-    var e = n.split(".").pop().toLowerCase(), imgE = ["jpg","jpeg","png","gif","webp","svg"], vidE = ["mp4","mov","avi","mkv","webm"], offE = ["doc","docx","xls","xlsx","ppt","pptx"];
+    if (d) return 'https://cdn-icons-png.flaticon.com/512/716/716784.png';
+    if (n.includes('_icon') || (fp && fp.includes('/icons/'))) return 'https://cdn-icons-png.flaticon.com/512/337/337943.png';
+    var e = n.split('.').pop().toLowerCase();
+    var imgE = ['jpg','jpeg','png','gif','webp','svg'], vidE = ['mp4','mov','avi','mkv','webm'], offE = ['doc','docx','xls','xlsx','ppt','pptx'];
     if (imgE.indexOf(e) !== -1 || vidE.indexOf(e) !== -1 || offE.indexOf(e) !== -1) {
-        if (fp) return "/nas/api/thumbnail?path=" + encodeURIComponent(fp) + "&t=" + Date.now() + "&nocache=1";
-        return "https://cdn-icons-png.flaticon.com/512/337/337943.png";
+        if (fp) return '/nas/api/thumbnail?path=' + encodeURIComponent(fp) + '&t=' + Date.now() + '&nocache=1';
+        return 'https://cdn-icons-png.flaticon.com/512/337/337943.png';
     }
-    var m = {py:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg",c:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/c/c-original.svg",cpp:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/cplusplus/cplusplus-original.svg",h:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/cplusplus/cplusplus-original.svg",hpp:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/cplusplus/cplusplus-original.svg",cc:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/cplusplus/cplusplus-original.svg",java:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/java/java-original.svg",go:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/go/go-original.svg",rs:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/rust/rust-original.svg",ts:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/typescript/typescript-original.svg",tsx:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/typescript/typescript-original.svg",js:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/javascript/javascript-original.svg",html:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/html5/html5-original.svg",css:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/css3/css3-original.svg",php:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/php/php-original.svg",rb:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/ruby/ruby-original.svg",swift:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/swift/swift-original.svg",kt:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/kotlin/kotlin-original.svg",sql:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mysql/mysql-original.svg",sh:"https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/bash/bash-original.svg",mp3:"https://cdn-icons-png.flaticon.com/512/461/461261.png",wav:"https://cdn-icons-png.flaticon.com/512/461/461261.png",m4a:"https://cdn-icons-png.flaticon.com/512/461/461261.png",aac:"https://cdn-icons-png.flaticon.com/512/461/461261.png",flac:"https://cdn-icons-png.flaticon.com/512/461/461261.png",pdf:"https://cdn-icons-png.flaticon.com/512/337/337946.png",doc:"https://cdn-icons-png.flaticon.com/512/732/732220.png",docx:"https://cdn-icons-png.flaticon.com/512/732/732220.png",xls:"https://cdn-icons-png.flaticon.com/512/732/732222.png",xlsx:"https://cdn-icons-png.flaticon.com/512/732/732222.png",ppt:"https://cdn-icons-png.flaticon.com/512/732/732225.png",pptx:"https://cdn-icons-png.flaticon.com/512/732/732225.png",json:"https://cdn-icons-png.flaticon.com/512/1055/1055644.png",md:"https://cdn-icons-png.flaticon.com/512/1055/1055644.png",txt:"https://cdn-icons-png.flaticon.com/512/1055/1055644.png",log:"https://cdn-icons-png.flaticon.com/512/1055/1055644.png",zip:"https://cdn-icons-png.flaticon.com/512/2961/2961218.png",tar:"https://cdn-icons-png.flaticon.com/512/2961/2961218.png",gz:"https://cdn-icons-png.flaticon.com/512/2961/2961218.png",rar:"https://cdn-icons-png.flaticon.com/512/2961/2961218.png"};
-    return m[e] || "https://cdn-icons-png.flaticon.com/512/2961/2961222.png";
+    var m = {py:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg',js:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/javascript/javascript-original.svg',html:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/html5/html5-original.svg',css:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/css3/css3-original.svg',pdf:'https://cdn-icons-png.flaticon.com/512/337/337946.png',doc:'https://cdn-icons-png.flaticon.com/512/732/732220.png',docx:'https://cdn-icons-png.flaticon.com/512/732/732220.png',xls:'https://cdn-icons-png.flaticon.com/512/732/732222.png',xlsx:'https://cdn-icons-png.flaticon.com/512/732/732222.png',ppt:'https://cdn-icons-png.flaticon.com/512/732/732225.png',pptx:'https://cdn-icons-png.flaticon.com/512/732/732225.png'};
+    return m[e] || 'https://cdn-icons-png.flaticon.com/512/2961/2961222.png';
 }
 
 function renderFiles(files) {
     const grid = document.getElementById('file-grid');
     if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
-    
     grid.className = 'file-grid' + (isGrid ? ' grid' : '');
     grid.innerHTML = '';
-    
-        const sorted = [...files].sort((a, b) => {
+    const sorted = [...files].sort((a, b) => {
         if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-        let cmp;
-        if (sortMode === 'date') {
-            cmp = (a.mtime || 0) - (b.mtime || 0);
-        } else {
-            cmp = a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'});
-        }
+        let cmp = sortMode === 'date' ? (a.mtime || 0) - (b.mtime || 0) : a.name.localeCompare(b.name, undefined, {numeric: true});
         return sortAsc ? cmp : -cmp;
     });
     sorted.forEach(f => {
@@ -535,23 +477,10 @@ function renderFiles(files) {
         const fpath = currentPath ? currentPath + '/' + f.name : f.name;
         const iconUrl = getFileIcon(f.name, f.is_dir, fpath);
         const size = f.is_dir ? '' : (f.size / 1024).toFixed(1) + ' KB';
-        
-        entry.innerHTML = `
-            <img src="${iconUrl}" class="icon" alt="icon">
-            <span class="name">${f.name}</span>
-            <span class="size">${size}</span>
-            <span class="actions">
-                ${f.is_dir ? '' : '<button onclick="event.stopPropagation();download(\''+encodeURIComponent(fpath)+'\')" title="Download">⬇️</button>'}
-                <button onclick="event.stopPropagation();showCtx(event,'${f.name}','${encodeURIComponent(fpath)}',${f.is_dir})" title="More">⋮</button>
-            </span>
-        `;
-        
+        entry.innerHTML = '<img src="' + iconUrl + '" class="icon" alt="icon"><span class="name">' + f.name + '</span><span class="size">' + size + '</span><span class="actions">' + (f.is_dir ? '' : '<button onclick="event.stopPropagation();download(\'${encodeURIComponent(fpath)}\')">⬇️</button>') + '<button onclick="event.stopPropagation();showCtx(event,\'${f.name},\'${encodeURIComponent(fpath)}\',${f.is_dir})">⋮</button></span>';
         entry.onclick = () => {
             if (f.is_dir) { loadFiles(fpath); return; }
-            if (isMedia(f.name)) { openMediaPlayer(fpath); return; }
             if (f.name.endsWith('.pdf')) { openPdfViewer(fpath); return; }
-            if (f.name.endsWith('.xlsx')) { openExcelViewer(fpath); return; }
-            if (f.name.endsWith('.docx')) { openWordViewer(fpath); return; }
             if (isEditable(f.name)) openEditor(fpath);
             else download(encodeURIComponent(fpath));
         };
@@ -560,21 +489,7 @@ function renderFiles(files) {
 }
 
 function setSort(mode) {
-    if (mode === sortMode) {
-        sortAsc = !sortAsc;
-    } else {
-        sortMode = mode;
-        sortAsc = true;
-    }
-    document.querySelectorAll('.flex.items-center.gap-1 button').forEach(b => {
-        b.classList.remove('bg-white/15', 'border-white/20', 'font-semibold');
-        b.classList.add('bg-white/5', 'border-white/10', 'text-white/60');
-    });
-    const btn = document.getElementById('btn-sort-' + mode);
-    if (btn) {
-        btn.classList.remove('bg-white/5', 'border-white/10', 'text-white/60');
-        btn.classList.add('bg-white/15', 'border-white/20', 'font-semibold');
-    }
+    if (mode === sortMode) sortAsc = !sortAsc; else { sortMode = mode; sortAsc = true; }
     renderFiles(allFiles);
 }
 
@@ -582,29 +497,21 @@ function showCtx(e, name, encPath, isDir) {
     ctxTarget = { name, encPath, isDir };
     const m = document.getElementById('ctx-menu');
     m.style.display = 'block';
-    m.style.left = Math.min(e.clientX, window.innerWidth - 170) + 'px';
-    m.style.top = Math.min(e.clientY, window.innerHeight - 250) + 'px';
+    m.style.left = e.clientX + 'px';
+    m.style.top = e.clientY + 'px';
 }
 
 function ctxAction(action) {
     if (!ctxTarget) return;
     const { name, encPath, isDir } = ctxTarget;
     const path = decodeURIComponent(encPath);
-    
-    if (action === 'edit') { if(!isDir && isEditable(name)) openEditor(path); else alert('Not editable'); }
+    if (action === 'edit') { if(!isDir && isEditable(name)) openEditor(path); }
     else if (action === 'download') { download(encPath); }
     else if (action === 'rename') {
         const nn = prompt('New name:', name);
-        if (nn && nn !== name) {
-            fetch('/nas/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) })
-            .then(r=>r.json()).then(r=>{ if(r.success) refresh(); else alert(r.error); });
-        }
-    }
-    else if (action === 'delete') {
-        if (confirm('Delete "' + name + '" ?')) {
-            fetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) })
-            .then(r=>r.json()).then(r=>{ if(r.success) refresh(); else alert(r.error); });
-        }
+        if (nn && nn !== name) apiFetch('/nas/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
+    } else if (action === 'delete') {
+        if (confirm('Delete "' + name + '" ?')) apiFetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
     }
     document.getElementById('ctx-menu').style.display = 'none';
 }
@@ -628,7 +535,7 @@ function toggleGrid() { isGrid = !isGrid; renderFiles(allFiles); }
 async function createFolder() {
     const n = prompt('Folder name:');
     if (!n) return;
-    const r = await fetch('/nas/api/mkdir', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, name:n}) });
+    const r = await apiFetch('/nas/api/mkdir', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, name:n}) });
     const d = await r.json();
     if (d.success) refresh(); else alert(d.error);
 }
@@ -636,312 +543,16 @@ async function createFolder() {
 async function handleUpload(input, files = null) {
     const targetFiles = files || (input.files ? Array.from(input.files) : []);
     if (!targetFiles.length) return;
-
-    const container = document.getElementById('upload-progress-container');
-    const progressBar = document.getElementById('upload-progress-bar');
-    const percentText = document.getElementById('upload-percent');
-    const filenameText = document.getElementById('upload-filename');
-
-    // 強制顯現並重置進度
-    container.classList.remove('hidden');
-    container.style.display = 'block'; 
-    progressBar.style.width = '0%';
-    percentText.textContent = '0%';
-
-    for (let i = 0; i < targetFiles.length; i++) {
-        const f = targetFiles[i];
-        filenameText.textContent = `[${i + 1}/${targetFiles.length}] ${f.name}`;
-        
-        await new Promise((resolve, reject) => {
-            const fd = new FormData();
-            fd.append('file', f);
-            fd.append('path', currentPath);
-
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/nas/api/upload');
-
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percent + '%';
-                    percentText.textContent = percent + '%';
-                }
-            };
-
-            xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const d = JSON.parse(xhr.responseText);
-                        if (d.success) resolve(); else reject(new Error(d.error));
-                    } catch (e) { reject(e); }
-                } else { reject(new Error('Upload failed')); }
-            };
-
-            xhr.onerror = () => reject(new Error('Network error'));
-            xhr.send(fd);
-        });
+    for (let f of targetFiles) {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('path', currentPath);
+        await fetch('/nas/api/upload', { method:'POST', body:fd });
     }
-
-    // 延遲消失，讓用戶看到 100%
-    setTimeout(() => {
-        container.classList.add('hidden');
-        container.style.display = 'none';
-    }, 1000);
-    
     refresh();
 }
 function isEditable(name) {
-    return ['txt','py','md','json','html','css','js','yml','yaml','log','sh','cpp','h','c','hpp','cc'].includes(name.split('.').pop().toLowerCase());
-}
-
-function isMedia(name) {
-    const ext = name.split('.').pop().toLowerCase();
-    return ['jpg','jpeg','png','gif','webp','svg','mp4','webm','ogg','mp3','wav','m4a','aac','flac','mov','avi','mkv'].includes(ext);
-}
-
-let currentMediaElem = null;
-let mediaTimer = null;
-
-function openMediaPlayer(path) {
-    const ext = path.split('.').pop().toLowerCase();
-    const imgExts = ['jpg','jpeg','png','gif','webp','svg'];
-    const audioExts = ['mp3','wav','ogg','m4a','aac','flac'];
-    const isImage = imgExts.includes(ext);
-    const isAudio = audioExts.includes(ext);
-    
-    document.getElementById('media-overlay').style.display = 'flex';
-    const viewport = document.getElementById('media-viewport');
-    viewport.innerHTML = '';
-    document.getElementById('media-controls').style.display = isImage ? 'none' : 'flex';
-    document.getElementById('media-time-current').textContent = '0:00';
-    document.getElementById('media-time-total').textContent = '0:00';
-    document.getElementById('media-progress-fill').style.width = '0%';
-    document.getElementById('playback-speed').value = '1';
-    
-    const url = '/nas/api/download?path=' + encodeURIComponent(path);
-    
-    if (isImage) {
-        const img = document.createElement('img');
-        img.src = url;
-        img.className = 'media-content zoom-fit';
-        img.style.maxWidth = '100%';
-        img.style.maxHeight = '100%';
-        img.onclick = toggleFullscreen;
-        viewport.appendChild(img);
-        currentMediaElem = img;
-    } else {
-        const media = isAudio ? document.createElement('audio') : document.createElement('video');
-        media.src = url;
-        media.className = 'media-content zoom-fit';
-        if (!isAudio) media.controls = false;
-        media.preload = 'metadata';
-        viewport.appendChild(media);
-        currentMediaElem = media;
-        
-        media.addEventListener('loadedmetadata', () => {
-            updateTimeDisplay();
-            if (mediaTimer) clearInterval(mediaTimer);
-            mediaTimer = setInterval(updateTimeDisplay, 250);
-        });
-        
-        media.addEventListener('ended', () => {
-            document.getElementById('btn-play-pause').textContent = '▶️';
-        });
-        
-        media.addEventListener('error', () => {
-            viewport.innerHTML = '<div style="color:rgba(255,255,255,0.5);font-size:14px">Failed to load media. Check file path or format.</div>';
-        });
-        
-        media.play().then(() => {
-            document.getElementById('btn-play-pause').textContent = '⏸️';
-        }).catch(() => {});
-    }
-}
-
-function closeMediaPlayer() {
-    document.getElementById('media-overlay').style.display = 'none';
-    if (mediaTimer) { clearInterval(mediaTimer); mediaTimer = null; }
-    if (currentMediaElem) {
-        if (currentMediaElem.tagName === 'VIDEO' || currentMediaElem.tagName === 'AUDIO') {
-            currentMediaElem.pause();
-            currentMediaElem.src = '';
-        }
-        currentMediaElem = null;
-    }
-    document.getElementById('media-viewport').innerHTML = '';
-}
-
-function togglePlay() {
-    if (!currentMediaElem) return;
-    if (currentMediaElem.paused) {
-        currentMediaElem.play();
-        document.getElementById('btn-play-pause').textContent = '⏸️';
-    } else {
-        currentMediaElem.pause();
-        document.getElementById('btn-play-pause').textContent = '▶️';
-    }
-}
-
-function rewindMedia() {
-    if (currentMediaElem) currentMediaElem.currentTime = Math.max(0, currentMediaElem.currentTime - 10);
-}
-
-function fastForwardMedia() {
-    if (currentMediaElem) currentMediaElem.currentTime = Math.min(currentMediaElem.duration, currentMediaElem.currentTime + 10);
-}
-
-function seekMedia(event) {
-    if (!currentMediaElem || !currentMediaElem.duration) return;
-    const bar = event.currentTarget;
-    const rect = bar.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    currentMediaElem.currentTime = ratio * currentMediaElem.duration;
-}
-
-function changeSpeed(val) {
-    if (currentMediaElem) currentMediaElem.playbackRate = parseFloat(val);
-}
-
-function changeZoom(val) {
-    if (currentMediaElem && (currentMediaElem.tagName === 'VIDEO' || currentMediaElem.tagName === 'IMG')) {
-        currentMediaElem.className = 'media-content ' + val;
-    }
-}
-
-function toggleFullscreen() {
-    if (currentMediaElem) {
-        if (currentMediaElem.requestFullscreen) {
-            currentMediaElem.requestFullscreen();
-        } else if (currentMediaElem.webkitRequestFullscreen) {
-            currentMediaElem.webkitRequestFullscreen();
-        } else if (currentMediaElem.msRequestFullscreen) {
-            currentMediaElem.msRequestFullscreen();
-        }
-    }
-}
-
-function updateTimeDisplay() {
-    if (!currentMediaElem || !currentMediaElem.duration) return;
-    const current = currentMediaElem.currentTime;
-    const total = currentMediaElem.duration;
-    document.getElementById('media-time-current').textContent = formatTime(current);
-    document.getElementById('media-time-total').textContent = formatTime(total);
-    document.getElementById('media-progress-fill').style.width = (current / total * 100) + '%';
-}
-
-function formatTime(seconds) {
-    if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return m + ':' + (s < 10 ? '0' : '') + s;
-}
-
-/* Monaco Editor */
-require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
-require(['vs/editor/editor.main'], function() { console.log("Monaco loaded"); });
-
-
-async function openExcelViewer(path) {
-    try {
-        const box = document.getElementById('monaco-box');
-        box.innerHTML = ''; 
-        box.style.border = 'none';
-        editor = null;
-
-        const r = await fetch('/nas/api/download?path=' + encodeURIComponent(path) + '&t=' + Date.now());
-        const buf = await r.arrayBuffer();
-        const wb = XLSX.read(buf, {type: 'array'});
-        const firstSheetName = wb.SheetNames[0];
-        const worksheet = wb.Sheets[firstSheetName];
-        const html = XLSX.utils.sheet_to_html(worksheet);
-        
-        document.getElementById('editor-path').textContent = ROOT + path;
-        document.getElementById('editor-overlay').style.display = 'block';
-        
-        // Make table cells editable for inline editing
-        const excelHtml = html.replace(/<td/g, '<td contenteditable="true"');
-        box.innerHTML = '<div style="overflow:auto; height:100%; background:#fff; color:#000; padding:10px" id="excel-table">' + excelHtml + '</div>';
-        
-        const saveBtn = document.getElementById('btn-save');
-        saveBtn.style.display = 'block'; 
-        saveBtn.onclick = async () => {
-            const table = document.getElementById('excel-table').getElementsByTagName('table')[0];
-            if (!table) { alert('Error: Excel table not found in DOM!'); return; }
-            
-            try {
-                // Manually extract data from DOM to ensure contenteditable values are captured
-                const data = [];
-                for (let i = 0; i < table.rows.length; i++) {
-                    const row = [];
-                    for (let j = 0; j < table.rows[i].cells.length; j++) {
-                        row.push(table.rows[i].cells[j].innerText || "");
-                    }
-                    data.push(row);
-                }
-                
-                const ws = XLSX.utils.aoa_to_sheet(data);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-                const wbOut = XLSX.write(wb, {bookType:'xlsx', type:'base64'});
-                
-                const res = await fetch('/nas/api/save', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        path: path,
-                        content: wbOut,
-                        binary: true
-                    })
-                });
-                const d = await res.json();
-                if (d.success) { alert('Excel Saved! 📊'); closeEditor(); }
-                else throw new Error(d.error);
-            } catch (e) { alert('Save error: ' + e.message); }
-        };
-    } catch(e) { alert('Excel load error: ' + e.message); }
-}
-
-
-async function openWordViewer(path) {
-    console.log('Attempting to open Word file:', path);
-    try {
-        const box = document.getElementById('monaco-box');
-        box.innerHTML = '';
-        box.style.border = 'none';
-        editor = null;
-
-        const r = await fetch('/nas/api/download?path=' + encodeURIComponent(path) + '&t=' + Date.now());
-        if (!r.ok) throw new Error('Failed to download Word file: ' + r.statusText);
-        
-        const blob = await r.blob();
-        console.log('Blob received, size:', blob.size);
-        
-        const arrayBuffer = await blob.arrayBuffer();
-        
-        if (typeof mammoth === 'undefined') {
-            throw new Error('Mammoth.js library not loaded. Please refresh the page.');
-        }
-        
-        // Using mammoth's Promise-based API
-        const result = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
-        console.log('Mammoth conversion successful');
-        const html = result.value; 
-        
-        if (!html || html.trim() === '') {
-            throw new Error('Mammoth converted the file to an empty string. The file might not be a valid .docx');
-        }
-        
-        document.getElementById('editor-path').textContent = ROOT + path;
-        document.getElementById('editor-overlay').style.display = 'block';
-        
-        box.innerHTML = '<div style="overflow:auto; height:100%; background:#fff; color:#000; padding:40px; font-family:serif; line-height:1.6" id="word-content">' + html + '</div>';
-
-        const saveBtn = document.querySelector('.save-btn');
-        if (saveBtn) saveBtn.style.display = 'none'; 
-    } catch(e) { 
-        console.error('Word Viewer Error:', e);
-        alert('Word load error: ' + e.message); 
-    }
+    return ['txt','py','md','json','html','css','js','yml','yaml','log','sh'].includes(name.split('.').pop().toLowerCase());
 }
 
 async function openEditor(path) {
@@ -949,28 +560,13 @@ async function openEditor(path) {
         currentEditingPath = path;
         const box = document.getElementById('monaco-box');
         box.innerHTML = '';
-        box.style.border = '1px solid rgba(255,255,255,0.06)';
-        editor = null;
-
-        const r = await fetch('/nas/api/read?path=' + encodeURIComponent(path));
-        if (!r.ok) throw new Error(await r.text());
+        const r = await apiFetch('/nas/api/read?path=' + encodeURIComponent(path));
         const content = await r.text();
         document.getElementById('editor-path').textContent = ROOT + path;
         document.getElementById('editor-overlay').style.display = 'block';
-        
-        const saveBtn = document.getElementById('btn-save');
-        if (saveBtn) saveBtn.style.display = 'block';
-        
         setTimeout(() => {
-            const ext = path.split('.').pop().toLowerCase();
-            const langMap = { py:'python', md:'markdown', json:'json', html:'html', css:'css', js:'javascript', yml:'yaml', yaml:'yaml', sh:'shell', txt:'plaintext', cpp:'cpp', h:'cpp', c:'c', hpp:'cpp', cc:'cpp' ,java:"https://cdn-icons-png.flaticon.com/512/5968/5968363.png",go:"https://cdn-icons-png.flaticon.com/512/5968/5968364.png",rs:"https://cdn-icons-png.flaticon.com/512/5968/5968365.png",ts:"https://cdn-icons-png.flaticon.com/512/5968/5968293.png",tsx:"https://cdn-icons-png.flaticon.com/512/5968/5968293.png",php:"https://cdn-icons-png.flaticon.com/512/5968/5968366.png",rb:"https://cdn-icons-png.flaticon.com/512/5968/5968367.png",swift:"https://cdn-icons-png.flaticon.com/512/5968/5968368.png",kt:"https://cdn-icons-png.flaticon.com/512/5968/5968369.png",sql:"https://cdn-icons-png.flaticon.com/512/2962/2962412.png"};
-            editor = monaco.editor.create(box, {
-                value: content, language: langMap[ext] || 'plaintext', theme: 'vs-dark',
-                automaticLayout: true, fontSize: 14, fontFamily: 'Fira Code, monospace',
-                minimap: { enabled: false }, padding: { top: 16 }
-            });
+            editor = monaco.editor.create(box, { value: content, language: 'plaintext', theme: 'vs-dark', automaticLayout: true });
             document.getElementById('btn-save').onclick = saveFile;
-            if (saveBtn) saveBtn.onclick = saveFile;
         }, 80);
     } catch(e) { alert('Error: ' + e.message); }
 }
@@ -980,73 +576,21 @@ function openPdfViewer(path) {
     overlay.style.display = 'flex';
     const viewport = document.getElementById('media-viewport');
     viewport.innerHTML = '';
-    document.getElementById('media-controls').style.display = 'none';
-    if (currentMediaElem) {
-        if (currentMediaElem.tagName === 'VIDEO' || currentMediaElem.tagName === 'AUDIO') {
-            currentMediaElem.pause();
-        }
-        currentMediaElem = null;
-    }
-    if (mediaTimer) { clearInterval(mediaTimer); mediaTimer = null; }
-    
     const iframe = document.createElement('iframe');
     iframe.src = '/nas/api/view?path=' + encodeURIComponent(path);
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.style.background = '#fff';
+    iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
     viewport.appendChild(iframe);
 }
 
 function closeEditor() { document.getElementById('editor-overlay').style.display = 'none'; }
 
 async function saveFile() {
-    if (!currentEditingPath) { alert('No file open to save!'); return; }
-    const path = currentEditingPath;
+    if (!currentEditingPath) return;
     const content = editor ? editor.getValue() : '';
     try {
-        const r = await fetch('/nas/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, content}) });
+        const r = await apiFetch('/nas/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentEditingPath, content}) });
         const d = await r.json();
-        if (d.success) { alert('Saved! ✨'); closeEditor(); }
-        else throw new Error(d.error);
+        if (d.success) { alert('Saved!'); closeEditor(); }
     } catch(e) { alert('Error: ' + e.message); }
 }
-
-document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
-
-/* Drag and Drop Implementation */
-document.getElementById('app').addEventListener('dragover', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    document.getElementById('app').style.background = 'rgba(255,255,255,0.05)';
-});
-
-document.getElementById('app').addEventListener('dragleave', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    document.getElementById('app').style.background = '';
-});
-
-document.getElementById('app').addEventListener('drop', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    document.getElementById('app').style.background = '';
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-        handleUpload(null, files);
-    }
-});
-
-async function updateRootDisplay() {
-    try {
-        const response = await fetch();
-        const data = await response.json();
-        document.getElementById('path-display').innerText = data.root;
-    } catch (e) { console.error('Failed to fetch root path', e); }
-}
-
-    updateRootDisplay();
 </script>
-
-</body>
-</html>
