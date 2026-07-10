@@ -26,8 +26,8 @@ if %errorlevel% neq 0 (
 )
 
 echo [3/3] Packaging into .exe...
-:: Use 'python -m PyInstaller' to avoid PATH issues
-python -m PyInstaller --noconsole --onefile --add-data "nas;nas" nas_gui.py
+:: Use 'python -m PyInstaller --hidden-import requests --hidden-import flask --hidden-import PIL --hidden-import nas.unified_nexus' to avoid PATH issues
+python -m PyInstaller --hidden-import requests --hidden-import flask --hidden-import PIL --hidden-import nas.unified_nexus --noconsole --onefile --add-data "nas;nas" nas_gui.py
 
 if %errorlevel% equ 0 (
     echo.
