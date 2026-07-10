@@ -26,7 +26,7 @@ def run_nas_server(root, password, port):
     except Exception as e:
         try:
             with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
-                f.write('SERVER CRASHED: ' + str(e) + '\n')
+                f.write('SERVER CRASHED: ' + str(e) + '\\n')
         except:
             pass
 
