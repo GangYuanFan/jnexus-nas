@@ -496,7 +496,10 @@ function renderFiles(files) {
             </span>`;
         entry.onclick = () => {
             if (f.is_dir) { loadFiles(fpath); return; }
-            if (f.name.endsWith('.pdf')) { openPdfViewer(fpath); return; }
+            const ext = f.name.split('.').pop().toLowerCase();
+            if (ext === 'pdf') { openPdfViewer(fpath); return; }
+            if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) { openMediaPlayer(fpath, 'image'); return; }
+            if (['mp4','mov','avi','mkv','webm'].includes(ext)) { openMediaPlayer(fpath, 'video'); return; }
             if (isEditable(f.name)) openEditor(fpath);
             else download(encPath);
         };
@@ -615,6 +618,27 @@ function openPdfViewer(path) {
     iframe.src = '/nas/api/view?path=' + encodeURIComponent(path);
     iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
     viewport.appendChild(iframe);
+}
+
+function openMediaPlayer(path, type) {
+    const overlay = document.getElementById('media-overlay');
+    overlay.style.display = 'flex';
+    const viewport = document.getElementById('media-viewport');
+    viewport.innerHTML = '';
+    
+    if (type === 'image') {
+        const img = document.createElement('img');
+        img.src = '/nas/api/view?path=' + encodeURIComponent(path);
+        img.className = 'media-content zoom-fit';
+        viewport.appendChild(img);
+    } else if (type === 'video') {
+        const video = document.createElement('video');
+        video.src = '/nas/api/view?path=' + encodeURIComponent(path);
+        video.controls = true;
+        video.autoplay = true;
+        video.className = 'media-content zoom-fit';
+        viewport.appendChild(video);
+    }
 }
 
 function closeEditor() { document.getElementById('editor-overlay').style.display = 'none'; }
