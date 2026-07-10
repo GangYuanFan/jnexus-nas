@@ -3,6 +3,22 @@ import logging
 import sys
 import os
 import webbrowser
+
+# Force PyInstaller bundle
+import requests
+import flask
+import flask_cors
+import dotenv
+import psutil
+import PIL
+
+# Force PyInstaller bundle
+import requests
+import flask
+import flask_cors
+import dotenv
+import psutil
+import PIL
 # Force PyInstaller to bundle these dependencies
 import requests
 import flask
