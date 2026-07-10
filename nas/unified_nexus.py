@@ -229,7 +229,7 @@ def get_thumbnail():
     path = request.args.get('path', '')
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR):
-        return redirect('https://cdn-icons-png.flaticon.com/512/2961/2961222.png', code=302)
+        return redirect('https://cdn-icons-png.flaticon.com/512/2961222.png', code=302)
     
     ext = os.path.splitext(full_path)[1].lower()
     
@@ -249,15 +249,15 @@ def get_thumbnail():
                 img = bg
             
             img_io = io.BytesIO()
-            img.save(img_io, 'JPEG', quality=75)
-            return Response(img_io.getvalue(), mimetype='image/jpeg')
+            img.save(img_io, 'JPEG', quality=85)
+            img_io.seek(0)
+            return send_file(img_io, mimetype='image/jpeg')
 
         # 2. Video Thumbnails (Pure Memory via Pipe)
         if ext in VID_EXTS:
             import subprocess
             ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
             try:
-                # Try to capture a frame from 1s in, then 0s
                 for timestamp in ['00:00:01', '00:00:00']:
                     cmd = [
                         ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
@@ -279,7 +279,7 @@ def get_thumbnail():
         custom_word_icon = os.path.join(ROOT_DIR, 'nas_tool/nas/icons/word_custom.png')
         if os.path.exists(custom_word_icon):
             return send_file(custom_word_icon, mimetype='image/png')
-        return redirect('https://cdn-icons-png.flaticon.com/512/732/732220.png', code=302)
+        return redirect('https://cdn-icons-png.flaticon.com/512/732220.png', code=302)
 
     # 4. Generic Fallback Icons
     icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
