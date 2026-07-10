@@ -6,6 +6,7 @@ import webbrowser
 # Force PyInstaller to bundle these dependencies
 import requests
 import flask
+import flask_cors
 import PIL
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
