@@ -6,12 +6,20 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QFileDialog, QMessageBox)
 from PySide6.QtCore import Qt, QProcess
+from PySide6 import QtGui
 
 class NasGui(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("J.NAS Server Controller")
-        self.setFixedSize(500, 250)
+        self.setFixedSize(500, 300)
+        
+        # Set Window Icon
+        # To use a custom icon, place 'icon.ico' in the same folder and use:
+        # self.setWindowIcon(QtGui.QIcon('icon.ico'))
+        # For now, using a generic system icon
+        self.setWindowIcon(self.style().standardIcon(QtGui.QStyle.SP_ComputerIcon))
+
         self.process = None
 
         # Main Widget
@@ -25,8 +33,7 @@ class NasGui(QMainWindow):
         root_layout = QHBoxLayout()
         self.root_label = QLabel("Root Directory:")
         self.root_input = QLineEdit()
-        # Set default root based on current workspace for convenience
-        self.root_input.setText("/home/jerry/workspace/nas") 
+        self.root_input.setText("/home/jerry/workspace/nas_tool/nas") 
         self.browse_btn = QPushButton("Browse")
         self.browse_btn.clicked.connect(self.browse_folder)
         root_layout.addWidget(self.root_label)
@@ -43,6 +50,15 @@ class NasGui(QMainWindow):
         pass_layout.addWidget(self.pass_label)
         pass_layout.addWidget(self.pass_input)
         layout.addLayout(pass_layout)
+
+        # Port Row
+        port_layout = QHBoxLayout()
+        self.port_label = QLabel("Server Port:")
+        self.port_input = QLineEdit()
+        self.port_input.setText("8000")
+        port_layout.addWidget(self.port_label)
+        port_layout.addWidget(self.port_input)
+        layout.addLayout(port_layout)
 
         # Control Buttons
         btn_layout = QHBoxLayout()
@@ -78,47 +94,37 @@ class NasGui(QMainWindow):
     def start_server(self):
         root = self.root_input.text().strip()
         password = self.pass_input.text().strip()
+        port = self.port_input.text().strip()
 
-        if not root or not password:
-            QMessageBox.warning(self, "Error", "Please specify both root directory and password.")
+        if not root or not password or not port.isdigit():
+            QMessageBox.warning(self, "Error", "Please specify valid root, password, and numeric port.")
             return
 
         try:
-            # Find the path to unified_nexus.py
-            # In packaged mode, we need to handle the internal path
             if getattr(sys, 'frozen', False):
-                # Running as bundled .exe
                 base_path = sys._MEIPASS
                 script_path = os.path.join(base_path, 'nas', 'unified_nexus.py')
             else:
-                # Running as .py script
                 script_path = os.path.join(os.path.dirname(__file__), 'nas', 'unified_nexus.py')
 
-            # Command to run the server
-            cmd = [
-                'python', script_path,
-                '--root', root,
-                '--password', password
-            ]
-
-            # Using QProcess for better control over the background server
             self.process = QProcess()
             self.process.setProcessChannelMode(QProcess.MergedChannels)
             self.process.started.connect(self.on_server_started)
             self.process.finished.connect(self.on_server_stopped)
             
-            # Start the process
-            self.process.start('python', [script_path, '--root', root, '--password', password])
+            self.process.start('python', [script_path, '--root', root, '--password', password, '--port', port])
             
         except Exception as e:
             QMessageBox.critical(self, "Execution Error", f"Failed to start server: {str(e)}")
 
     def on_server_started(self):
-        self.status_label.setText("Status: Running (Port 8000)")
+        port = self.port_input.text().strip()
+        self.status_label.setText(f"Status: Running (Port {port})")
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.root_input.setEnabled(False)
         self.pass_input.setEnabled(False)
+        self.port_input.setEnabled(False)
 
     def on_server_stopped(self):
         self.status_label.setText("Status: Stopped")
@@ -126,6 +132,7 @@ class NasGui(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.root_input.setEnabled(True)
         self.pass_input.setEnabled(True)
+        self.port_input.setEnabled(True)
 
     def stop_server(self):
         if self.process:
@@ -133,7 +140,11 @@ class NasGui(QMainWindow):
             self.process.kill()
 
     def open_browser(self):
-        webbrowser.open("http://localhost:8000/nas/")
+        port = self.port_input.text().strip()
+        if not port.isdigit():
+            QMessageBox.warning(self, "Error", "Please enter a valid port before opening the browser.")
+            return
+        webbrowser.open(f"http://localhost:{port}/nas/")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
