@@ -475,14 +475,23 @@ function renderFiles(files) {
         const entry = document.createElement('div');
         entry.className = 'file-entry';
         const fpath = currentPath ? currentPath + '/' + f.name : f.name;
+        const encPath = encodeURIComponent(fpath);
         const iconUrl = getFileIcon(f.name, f.is_dir, fpath);
         const size = f.is_dir ? '' : (f.size / 1024).toFixed(1) + ' KB';
-        entry.innerHTML = '<img src="' + iconUrl + '" class="icon" alt="icon"><span class="name">' + f.name + '</span><span class="size">' + size + '</span><span class="actions">' + (f.is_dir ? '' : '<button onclick="event.stopPropagation();download(\'${encodeURIComponent(fpath)}\')">⬇️</button>') + '<button onclick="event.stopPropagation();showCtx(event,\'${f.name},\'${encodeURIComponent(fpath)}\',${f.is_dir})">⋮</button></span>';
+        
+        entry.innerHTML = `
+            <img src="${iconUrl}" class="icon" alt="icon">
+            <span class="name">${f.name}</span>
+            <span class="size">${size}</span>
+            <span class="actions">
+                ${f.is_dir ? '' : `<button onclick="event.stopPropagation();download('${encPath}')">⬇️</button>`}
+                <button onclick="event.stopPropagation();showCtx(event, '${f.name}', '${encPath}', ${f.is_dir})">⋮</button>
+            </span>`;
         entry.onclick = () => {
             if (f.is_dir) { loadFiles(fpath); return; }
             if (f.name.endsWith('.pdf')) { openPdfViewer(fpath); return; }
             if (isEditable(f.name)) openEditor(fpath);
-            else download(encodeURIComponent(fpath));
+            else download(encPath);
         };
         grid.appendChild(entry);
     });
