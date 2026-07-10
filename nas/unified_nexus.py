@@ -16,6 +16,12 @@ app.json.sort_keys = False
 
 # --- CONFIG ---
 ROOT_DIR = '/home/jerry/workspace'
+THUMB_DIR = '/tmp/nas_thumbnails'
+os.makedirs(THUMB_DIR, exist_ok=True)
+
+# Image/Video extensions for thumbnails
+IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
+VID_EXTS = {'.mp4','.mov','.avi','.mkv','.webm'}
 
 # --- NAS BLUEPRINT (Handles /nas prefix) ---
 nas_bp = Blueprint('nas', __name__, url_prefix='/nas')
@@ -153,6 +159,50 @@ def view_file():
     full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path), as_attachment=False)
+
+@nas_bp.route('/api/thumbnail')
+def get_thumbnail():
+    path = request.args.get('path', '')
+    if path.startswith('/'): path = path.lstrip('/')
+    full_path = os.path.normpath(os.path.join(ROOT_DIR, path))
+    if not full_path.startswith(ROOT_DIR):
+        return redirect('https://cdn-icons-png.flaticon.com/512/2961/2961222.png', code=302)
+    ext = os.path.splitext(full_path)[1].lower()
+    cache_key = path.replace('/', '_').replace(' ', '_')
+    thumb_path = os.path.join(THUMB_DIR, cache_key + '.jpg')
+    if os.path.exists(thumb_path):
+        src_mtime = os.path.getmtime(full_path) if os.path.exists(full_path) else 0
+        thumb_mtime = os.path.getmtime(thumb_path)
+        if thumb_mtime >= src_mtime:
+            return send_file(thumb_path, mimetype='image/jpeg')
+    try:
+        if ext in IMG_EXTS:
+            from PIL import Image
+            img = Image.open(full_path)
+            img.thumbnail((200, 200), Image.LANCZOS)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                bg = Image.new('RGB', img.size, (30, 30, 40))
+                if img.mode == 'RGBA':
+                    bg.paste(img, mask=img.split()[3])
+                else:
+                    bg.paste(img)
+                img = bg
+            img.save(thumb_path, 'JPEG', quality=75)
+            return send_file(thumb_path, mimetype='image/jpeg')
+        if ext in VID_EXTS:
+            import subprocess
+            result = subprocess.run(
+                ['ffmpeg', '-i', full_path, '-ss', '00:00:01', '-vframes', '1',
+                 '-vf', 'scale=200:-1', '-q:v', '5', '-y', thumb_path],
+                capture_output=True, timeout=15
+            )
+            if result.returncode == 0 and os.path.exists(thumb_path):
+                return send_file(thumb_path, mimetype='image/jpeg')
+    except Exception:
+        pass
+    icon_map = {'jpg':'337943','jpeg':'337943','png':'337943','gif':'337943','webp':'337943','svg':'337943','mp4':'1179067','mov':'1179067','avi':'1179067','mkv':'1179067','webm':'1179067','mp3':'461261','wav':'461261','m4a':'461261','aac':'461261','flac':'461261','pdf':'337946','doc':'732220','docx':'732220','xls':'732222','xlsx':'732222','ppt':'732225','pptx':'732225','py':'1055644','js':'1055644','html':'1055644','css':'1055644','json':'1055644','md':'1055644','txt':'1055644','log':'1055644','sh':'1055644','zip':'2961218','tar':'2961218','gz':'2961218','rar':'2961218'}
+    icon_id = icon_map.get(ext[1:] if ext.startswith('.') else ext, '2961222')
+    return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_id}.png', code=302)
 
 app.register_blueprint(nas_bp)
 
