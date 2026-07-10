@@ -25,17 +25,11 @@ app.json.sort_keys = False
 # --- CONFIG ---
 ROOT_DIR = '/home/jerry/workspace'
 NAS_PASSWORD = 'JERRY_NEXUS_2026'
-THUMB_DIR = os.path.join(ROOT_DIR, '.nas_thumbnails')
 
 def init_app(root, password, port):
-    global ROOT_DIR, NAS_PASSWORD, THUMB_DIR
+    global ROOT_DIR, NAS_PASSWORD
     ROOT_DIR = os.path.abspath(root)
     NAS_PASSWORD = password
-    THUMB_DIR = os.path.join(ROOT_DIR, '.nas_thumbnails')
-    try:
-        os.makedirs(THUMB_DIR, exist_ok=True)
-    except Exception as e:
-        logger.error(f'Could not create thumbnail dir {THUMB_DIR}: {e}')
     logger.info(f'NAS App initialized with absolute root={ROOT_DIR}, port={port}')
 
 def resolve_path(path):
@@ -55,8 +49,6 @@ def resolve_path(path):
         res = os.path.normpath(os.path.join(ROOT_DIR, clean_path.lstrip('/')))
     logger.info(f'[PATH-DEBUG] Resolved to: "{res}"')
     return res
-
-os.makedirs(THUMB_DIR, exist_ok=True)
 
 # Image/Video extensions for thumbnails
 IMG_EXTS = {'.jpg','.jpeg','.png','.gif','.webp'}
@@ -232,14 +224,9 @@ def get_thumbnail():
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR):
         return redirect('https://cdn-icons-png.flaticon.com/512/2961/2961222.png', code=302)
+    
     ext = os.path.splitext(full_path)[1].lower()
-    cache_key = path.replace('/', '_').replace(' ', '_')
-    thumb_path = os.path.join(THUMB_DIR, cache_key + '.jpg')
-    if os.path.exists(thumb_path):
-        src_mtime = os.path.getmtime(full_path) if os.path.exists(full_path) else 0
-        thumb_mtime = os.path.getmtime(thumb_path)
-        if thumb_mtime >= src_mtime:
-            return send_file(thumb_path, mimetype='image/jpeg')
+    
     try:
         if ext in IMG_EXTS:
             from PIL import Image, ImageOps
@@ -253,28 +240,15 @@ def get_thumbnail():
                 else:
                     bg.paste(img)
                 img = bg
-            img.save(thumb_path, 'JPEG', quality=75)
-            return send_file(thumb_path, mimetype='image/jpeg')
-        if ext in VID_EXTS:
-            import subprocess
-            import shutil
-            ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
-            try:
-                for timestamp in ['00:00:01', '00:00:00']:
-                    result = subprocess.run(
-                        [ffmpeg_bin, '-loglevel', 'error', '-i', full_path, '-ss', timestamp, '-vframes', '1',
-                         '-vf', 'scale=200:-1', '-q:v', '5', '-update', '1', '-y', thumb_path],
-                        capture_output=True, timeout=15
-                    )
-                    if result.returncode == 0 and os.path.exists(thumb_path):
-                        return send_file(thumb_path, mimetype='image/jpeg')
-            except Exception as e:
-                logger.error(f"Video thumb error: {e}")
-                pass
+            
+            img_io = io.BytesIO()
+            img.save(img_io, 'JPEG', quality=75)
+            img_io.seek(0)
+            return send_file(img_io, mimetype='image/jpeg')
     except Exception as e:
-        logger.error(f"General thumb error: {e}")
+        logger.error(f"Image thumb error: {e}")
         pass
-    
+
     if ext in {'.doc', '.docx'}:
         custom_word_icon = os.path.join(ROOT_DIR, 'nas_tool/nas/icons/word_custom.png')
         if os.path.exists(custom_word_icon):
