@@ -25,11 +25,12 @@ def run_nas_server(root, password, port):
         from nas.unified_nexus import app
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
-        with open('nas_server_crash.log', 'a') as f:
-            f.write(f'CRASH: {str(e)}
+        try:
+            with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
+                f.write('CRASH: ' + str(e) + '
 ')
-
-
+        except:
+            pass
 class NasGui(QMainWindow):
     def __init__(self):
         super().__init__()
