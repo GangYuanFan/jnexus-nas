@@ -571,7 +571,11 @@ async function openEditor(path) {
         box.innerHTML = '';
         const r = await apiFetch('/nas/api/read?path=' + encodeURIComponent(path));
         const content = await r.text();
-        document.getElementById('editor-path').textContent = ROOT + path;
+        
+        // Fix path display: ensure there's a slash between ROOT and path
+        const displayPath = (ROOT.endsWith('/') ? ROOT : ROOT + '/') + (path.startsWith('/') ? path.slice(1) : path);
+        document.getElementById('editor-path').textContent = displayPath;
+        
         document.getElementById('editor-overlay').style.display = 'block';
         setTimeout(() => {
             editor = monaco.editor.create(box, { value: content, language: 'plaintext', theme: 'vs-dark', automaticLayout: true });
