@@ -462,8 +462,8 @@ function renderFiles(files) {
     sorted.forEach(f => {
         const entry = document.createElement('div');
         entry.className = 'file-entry';
-        const iconUrl = getFileIcon(f.name, f.is_dir, fpath);
         const fpath = currentPath ? currentPath + '/' + f.name : f.name;
+        const iconUrl = getFileIcon(f.name, f.is_dir, fpath);
         const size = f.is_dir ? '' : (f.size / 1024).toFixed(1) + ' KB';
         
         entry.innerHTML = `
