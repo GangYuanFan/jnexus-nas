@@ -5,6 +5,7 @@ import sys
 import os
 import webbrowser
 import requests
+import time
 
 # Force PyInstaller bundle
 import requests
@@ -29,16 +30,16 @@ logging.basicConfig(
 )
 
 def run_nas_server(root, password, port):
-    # This function runs the Flask server in a separate thread.
+    """Run Flask server in a subprocess. This function runs in a SEPARATE process,
+    so os._exit() or any crash won't affect the GUI."""
     try:
-        # Import the app and the init function inside the thread
         from nas.unified_nexus import app, init_app
         init_app(root, password, port)
         app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
     except Exception as e:
         try:
             with open('nas_server_crash.log', 'a', encoding='utf-8') as f:
-                f.write('SERVER CRASHED: ' + str(e) + '\\n')
+                f.write('SERVER CRASHED: ' + str(e) + '\n')
         except:
             pass
 
@@ -51,7 +52,7 @@ class NasGui(QMainWindow):
         # Use a generic system icon
         self.setWindowIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
 
-        self.server_thread = None
+        self.server_process = None
         self.current_port = None
 
         # Main Widget
@@ -138,13 +139,14 @@ class NasGui(QMainWindow):
         try:
             logging.debug(f"Attempting to start server: root={root}, port={port}")
             
-            # Launch server in a daemon thread
-            self.server_thread = threading.Thread(
+            # Launch server in a SEPARATE PROCESS — not a thread!
+            # This guarantees that killing the server won't affect the GUI.
+            self.server_process = multiprocessing.Process(
                 target=run_nas_server, 
                 args=(root, password, port),
                 daemon=True
             )
-            self.server_thread.start()
+            self.server_process.start()
             
             # Update UI Status
             self.status_label.setText(f"Status: Running (Port {port})")
@@ -153,22 +155,48 @@ class NasGui(QMainWindow):
             self.root_input.setEnabled(False)
             self.pass_input.setEnabled(False)
             self.port_input.setEnabled(False)
-            logging.info(f"Server thread started (Port {port})")
+            logging.info(f"Server process started (PID {self.server_process.pid}, Port {port})")
 
         except Exception as e:
             logging.error(f"Failed to start server: {str(e)}")
             QMessageBox.critical(self, "Execution Error", f"Failed to start server: {str(e)}")
 
     def stop_server(self):
-        if self.current_port:
-            logging.debug(f"Requesting server shutdown on port {self.current_port}")
-            try:
-                # Call the shutdown API to kill the server process
-                requests.post(f"http://localhost:{self.current_port}/nas/api/shutdown", timeout=2)
-            except Exception as e:
-                logging.error(f"Shutdown request failed: {str(e)}")
+        if self.server_process is None or not self.server_process.is_alive():
+            self._reset_ui_after_stop()
+            return
+
+        logging.debug(f"Stopping server process (PID {self.server_process.pid})...")
         
-        # Reset UI Status
+        # Step 1: Try graceful shutdown via API
+        if self.current_port:
+            try:
+                requests.post(
+                    f"http://localhost:{self.current_port}/nas/api/shutdown",
+                    timeout=2
+                )
+                # Give it a moment to shut down gracefully
+                time.sleep(1)
+            except Exception as e:
+                logging.debug(f"Shutdown API request failed (expected if server is unresponsive): {e}")
+
+        # Step 2: If still alive, terminate the process
+        if self.server_process.is_alive():
+            logging.debug("Process still alive, terminating...")
+            self.server_process.terminate()
+            self.server_process.join(timeout=3)
+        
+        # Step 3: Force kill if still alive
+        if self.server_process.is_alive():
+            logging.debug("Process still alive after terminate, killing...")
+            self.server_process.kill()
+            self.server_process.join(timeout=2)
+
+        self.server_process = None
+        self._reset_ui_after_stop()
+        logging.info("Server process stopped successfully")
+
+    def _reset_ui_after_stop(self):
         self.status_label.setText("Status: Stopped")
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
