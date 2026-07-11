@@ -513,10 +513,11 @@ function checkAuth() {
                 throw new Error(d.error || 'Invalid key');
             }
         }).catch(e => {
-        const errEl = document.getElementById('auth-err');
-        errEl.textContent = e.message || 'Invalid key. Try again.';
-        errEl.style.opacity = '1';
-        setTimeout(() => errEl.style.opacity = '0', 2000);
+            const errEl = document.getElementById('auth-err');
+            errEl.textContent = e.message || 'Invalid key. Try again.';
+            errEl.style.opacity = '1';
+            setTimeout(() => errEl.style.opacity = '0', 2000);
+        });
     });
 }
 
