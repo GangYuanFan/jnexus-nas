@@ -298,7 +298,7 @@
         <div class="page" id="page-files">
             <div class="page-header">
                 <h2>File Station</h2>
-                <div class="breadcrumb" id="breadcrumb">/ home / jerry / workspace</div>
+                <div class="breadcrumb" id="breadcrumb">/ ...</div>
             </div>
             
             <div class="toolbar">
@@ -635,7 +635,8 @@ function renderBreadcrumb(path) {
     el.innerHTML = '';
     const parts = path ? path.split('/') : [];
     const rootSpan = document.createElement('span');
-    rootSpan.className = 'bc-item'; rootSpan.textContent = '/ home'; rootSpan.onclick = () => loadFiles('');
+    const rootName = ROOT.split('/').filter(Boolean).pop() || 'home';
+    rootSpan.className = 'bc-item'; rootSpan.textContent = '/ ' + rootName; rootSpan.onclick = () => loadFiles('');
     el.appendChild(rootSpan);
     let cum = '';
     parts.forEach((p, i) => {
