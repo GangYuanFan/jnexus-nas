@@ -147,7 +147,7 @@
         .pdf-toolbar .pdf-page-indicator { font-size: 13px; color: rgba(255,255,255,0.5); min-width: 100px; text-align: center; font-variant-numeric: tabular-nums; }
         .pdf-toolbar .pdf-zoom { font-size: 13px; color: rgba(255,255,255,0.5); }
         .pdf-viewer { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; padding: 1rem; background: rgba(0,0,0,0.3); }
-        .pdf-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); cursor: crosshair; }
+        .pdf-viewer img { object-fit: contain; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); cursor: crosshair; }
         .pdf-loading { display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.2); font-size: 14px; gap: 10px; }
 
         /* Word specific */
@@ -1055,6 +1055,19 @@ function loadPdfPage(pageNum) {
     img.onload = function() {
         img.style.display = 'block';
         loading.style.display = 'none';
+        // Dynamically control display size: scale relative to default (1.5)
+        const zoomRatio = pdfState.scale / 1.5;
+        if (zoomRatio <= 1.0) {
+            // Fit to container
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '100%';
+            img.style.width = '';
+        } else {
+            // Zoomed in: remove container constraints so image can grow
+            img.style.maxWidth = 'none';
+            img.style.maxHeight = 'none';
+            img.style.width = Math.round(zoomRatio * 100) + '%';
+        }
         updatePdfControls();
     };
     img.onerror = function() {
