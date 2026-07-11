@@ -1,7 +1,7 @@
 # NAS package
-__version__ = '1.0.0'
+# Version sourced from unified_nexus.py (the canonical definition)
+from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
-RELEASE_DATE = '2026-07-11'
 
 # CHANGELOG:
 # 1.0.0 (2026-07-11) - Initial release

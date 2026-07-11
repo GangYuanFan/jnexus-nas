@@ -3,7 +3,9 @@ import logging
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
-from . import __version__, RELEASE_DATE
+# Version — defined here for direct script execution support
+__version__ = '1.0.0'
+RELEASE_DATE = '2026-07-11'
 import psutil
 import platform
 import time
