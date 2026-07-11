@@ -795,8 +795,24 @@ function showCtx(e, name, encPath, isDir) {
     ctxTarget = { name, encPath, isDir };
     const m = document.getElementById('ctx-menu');
     m.style.display = 'block';
-    m.style.left = e.clientX + 'px';
-    m.style.top = e.clientY + 'px';
+    
+    // Position menu with viewport boundary detection
+    let left = e.clientX;
+    let top = e.clientY;
+    const menuW = 160;
+    const menuH = m.offsetHeight || 220;
+    
+    // Flip left if overflowing right edge
+    if (left + menuW > window.innerWidth) {
+        left = window.innerWidth - menuW - 8;
+    }
+    // Flip top if overflowing bottom edge
+    if (top + menuH > window.innerHeight) {
+        top = window.innerHeight - menuH - 8;
+    }
+    
+    m.style.left = Math.max(4, left) + 'px';
+    m.style.top = Math.max(4, top) + 'px';
 }
 
 function ctxAction(action) {
