@@ -247,7 +247,8 @@
             <h2>J.NAS</h2>
             <p>Enter Access Key to proceed</p>
             <!-- Hidden username field helps iOS Keychain associate the password -->
-            <input type="text" name="username" autocomplete="username" value="nas" style="display:none">
+            <!-- Use opacity/position instead of display:none so iOS detects it -->
+            <input type="text" name="username" autocomplete="username" value="jerry" style="position:absolute;opacity:0;height:1px;width:1px;pointer-events:none">
             <input type="password" id="access-key" name="password" autocomplete="current-password" placeholder="Access Key...">
             <button type="submit">UNLOCK</button>
             <div class="err" id="auth-err">Invalid key. Try again.</div>
