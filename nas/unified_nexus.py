@@ -474,11 +474,20 @@ def get_thumbnail():
         pass
 
     # 3. Special Document Icons
-    if ext in {'.doc', '.docx'}:
-        custom_word_icon = os.path.join(ROOT_DIR, 'nas_tool/nas/icons/word_custom.png')
-        if os.path.exists(custom_word_icon):
-            return send_file(custom_word_icon, mimetype='image/png')
-        return redirect('https://cdn-icons-png.flaticon.com/512/732220.png', code=302)
+    icon_paths = {
+        '.doc': ('nas_tool/nas/icons/word_custom.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
+        '.docx': ('nas_tool/nas/icons/word_custom.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
+        '.xls': ('nas_tool/nas/icons/xlsx_custom.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
+        '.xlsx': ('nas_tool/nas/icons/xlsx_custom.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
+        '.ppt': ('nas_tool/nas/icons/ppt_custom.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
+        '.pptx': ('nas_tool/nas/icons/ppt_custom.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
+    }
+    if ext in icon_paths:
+        custom_path, fallback_url = icon_paths[ext]
+        full_custom = os.path.join(ROOT_DIR, custom_path)
+        if os.path.exists(full_custom):
+            return send_file(full_custom, mimetype='image/png')
+        return redirect(fallback_url, code=302)
 
     # 4. Generic Fallback Icons
     icon_map = {
