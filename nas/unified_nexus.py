@@ -511,6 +511,14 @@ def get_thumbnail():
         return redirect(icon_val, code=302)
     return redirect(f'https://cdn-icons-png.flaticon.com/512/{icon_val}.png', code=302)
 
+@nas_bp.route('/manifest.json')
+def pwa_manifest():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'manifest.json')
+
+@nas_bp.route('/sw.js')
+def pwa_sw():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'sw.js')
+
 app.register_blueprint(nas_bp)
 
 @app.route('/')

@@ -1,0 +1,23 @@
+{
+  "name": "J.NAS",
+  "short_name": "J.NAS",
+  "description": "Network Attached Storage System",
+  "start_url": "/nas/",
+  "scope": "/nas/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [
+    {
+      "src": "/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
