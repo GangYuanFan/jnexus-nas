@@ -243,11 +243,15 @@
 
 <div id="auth-overlay" style="display:none">
     <div class="auth-box">
-        <h2>J.NAS</h2>
-        <p>Enter Access Key to proceed</p>
-        <input type="password" id="access-key" placeholder="Access Key...">
-        <button onclick="checkAuth()">UNLOCK</button>
-        <div class="err" id="auth-err">Invalid key. Try again.</div>
+        <form id="auth-form" autocomplete="on" onsubmit="checkAuth();return false">
+            <h2>J.NAS</h2>
+            <p>Enter Access Key to proceed</p>
+            <!-- Hidden username field helps iOS Keychain associate the password -->
+            <input type="text" name="username" autocomplete="username" value="nas" style="display:none">
+            <input type="password" id="access-key" name="password" autocomplete="current-password" placeholder="Access Key...">
+            <button type="submit">UNLOCK</button>
+            <div class="err" id="auth-err">Invalid key. Try again.</div>
+        </form>
     </div>
 </div>
 
