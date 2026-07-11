@@ -1,4 +1,4 @@
-# J.NAS — Jerry's Network Attached Storage
+# J.NAS — Network Attached Storage System
 
 **Version 1.0.0** | A lightweight, browser-based NAS management tool with a desktop GUI controller.
 
@@ -304,4 +304,4 @@ The server runs directly with Python — no compilation required.
 
 ## 📄 License
 
-Internal project — J.NAS by Jerry.
+Internal project.
