@@ -475,12 +475,12 @@ def get_thumbnail():
 
     # 3. Special Document Icons
     icon_paths = {
-        '.doc': ('nas_tool/nas/icons/word_custom.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
-        '.docx': ('nas_tool/nas/icons/word_custom.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
-        '.xls': ('nas_tool/nas/icons/xlsx_custom.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
-        '.xlsx': ('nas_tool/nas/icons/xlsx_custom.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
-        '.ppt': ('nas_tool/nas/icons/ppt_custom.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
-        '.pptx': ('nas_tool/nas/icons/ppt_custom.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
+        '.doc': ('nas_tool/nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
+        '.docx': ('nas_tool/nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png', 'https://cdn-icons-png.flaticon.com/512/732220.png'),
+        '.xls': ('nas_tool/nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
+        '.xlsx': ('nas_tool/nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png', 'https://cdn-icons-png.flaticon.com/512/732222.png'),
+        '.ppt': ('nas_tool/nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
+        '.pptx': ('nas_tool/nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png', 'https://cdn-icons-png.flaticon.com/512/732225.png'),
     }
     if ext in icon_paths:
         custom_path, fallback_url = icon_paths[ext]
