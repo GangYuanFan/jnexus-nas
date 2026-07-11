@@ -116,9 +116,21 @@ Once authenticated, the NAS remembers your session for **5 minutes** via `localS
 
 ### Installation (Windows)
 
-1. Download `nas_gui.exe` from the `dist/` folder
-2. Place it anywhere (no installation needed)
-3. Double-click to run
+**Step 1 — Build the executable**
+
+You need to compile the GUI before first use:
+```bash
+cd D:\nas_tool
+build_windows.bat
+```
+This will:
+- Install all Python dependencies
+- Compile `nas_gui.exe` using PyInstaller
+- Output to `dist/nas_gui.exe` (~69 MB)
+
+**Step 2 — Run**
+1. Open `dist/nas_gui.exe`
+2. No installation needed — double-click to run
 
 ### How to Use
 

@@ -1,3 +1,24 @@
+# Logs — never commit
+*.log
+*.log.*
+nas_*.log
+unified_nexus*.log
+nas_server*.log
+nas_gui_debug.log
+
+# Environment
 .env
-unified_nexus.log
+
+# Build artifacts
 __pycache__/
+*.pyc
+build/
+dist/
+*.spec
+
+# Backup files
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store

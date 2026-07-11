@@ -1,0 +1,18 @@
+# Build artifacts
+__pycache__/
+*.pyc
+build/
+dist/
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# Backup files
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store
