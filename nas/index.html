@@ -481,29 +481,38 @@
 
 
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
-const ROOT = '/home/jerry/workspace';
+let ROOT = '';
 let userPassword = '';
+
+async function fetchConfig() {
+    try {
+        const r = await fetch('/nas/api/config?password=' + encodeURIComponent(userPassword));
+        const d = await r.json();
+        ROOT = d.root;
+    } catch(e) { ROOT = '/home/jerry/workspace'; /* fallback */ }
+}
 
 function checkAuth() {
     const k = document.getElementById('access-key').value;
-    fetch('/nas/api/auth', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({password: k})
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            userPassword = k;
-            document.getElementById('auth-overlay').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('auth-overlay').style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
-                loadFiles('', true);
-                loadDashboard();
-            }, 400);
-        } else {
-            throw new Error(d.error || 'Invalid key');
-        }
-    }).catch(e => {
+    userPassword = k;
+    fetchConfig().then(() => {
+        fetch('/nas/api/auth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: k})
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                document.getElementById('auth-overlay').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('auth-overlay').style.display = 'none';
+                    document.getElementById('app').style.display = 'flex';
+                    loadFiles('', true);
+                    loadDashboard();
+                }, 400);
+            } else {
+                throw new Error(d.error || 'Invalid key');
+            }
+        }).catch(e => {
         const errEl = document.getElementById('auth-err');
         errEl.textContent = e.message || 'Invalid key. Try again.';
         errEl.style.opacity = '1';

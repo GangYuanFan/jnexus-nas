@@ -85,6 +85,11 @@ def serve_nas_index():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(current_dir, 'index.html')
 
+@nas_bp.route('/api/config')
+def nas_config():
+    """Return current NAS root path config."""
+    return jsonify({'root': ROOT_DIR})
+
 @nas_bp.route('/api/sysinfo')
 def system_info():
     cpu_percent = psutil.cpu_percent(interval=0.5)
@@ -491,4 +496,10 @@ def redirect_to_nas():
     return redirect('/nas/', code=301)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    # When run directly (e.g. via jnexus.service), go through init_app()
+    # so the root path is handled consistently. Override via env vars.
+    root = os.environ.get('NAS_ROOT_DIR', '/home/jerry/workspace')
+    password = os.environ.get('NAS_PASSWORD', 'JERRY_NEXUS_2026')
+    port = int(os.environ.get('NAS_PORT', '8000'))
+    init_app(root, password, port)
+    app.run(host='0.0.0.0', port=port)
