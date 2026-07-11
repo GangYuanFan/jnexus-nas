@@ -234,6 +234,13 @@
             #sidebar.open { transform: translateX(0); }
             #main { margin-left: 0; padding: 1rem; padding-top: 3.5rem; }
             #sidebar-toggle { display: flex; position: fixed; top: 0.6rem; left: 0.6rem; z-index: 60; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
+        /* iOS PWA safe area fix */
+        /* iOS PWA safe area fix */
+        @supports (top: env(safe-area-inset-top)) {
+            #sidebar-toggle { top: calc(0.6rem + env(safe-area-inset-top)) !important; }
+            #main { padding-top: calc(2rem + env(safe-area-inset-top)) !important; }
+            #close-media { top: calc(1.5rem + env(safe-area-inset-top)) !important; }
+        }
             #sidebar-close { display: flex; position: absolute; top: 0.6rem; right: 0.6rem; background: rgba(255,255,255,0.04); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
         }
     </style>
