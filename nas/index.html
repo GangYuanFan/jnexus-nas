@@ -236,7 +236,7 @@
 </head>
 <body>
 
-<div id="auth-overlay">
+<div id="auth-overlay" style="display:none">
     <div class="auth-box">
         <h2>J.NAS</h2>
         <p>Enter Access Key to proceed</p>
@@ -483,6 +483,58 @@
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
 let ROOT = '';
 let userPassword = '';
+const AUTH_TTL = 5 * 60 * 1000; // 5 minutes
+const AUTH_KEY = 'jnas_auth_session';
+
+function getAuthSession() {
+    try {
+        const raw = localStorage.getItem(AUTH_KEY);
+        if (!raw) return null;
+        const session = JSON.parse(raw);
+        if (Date.now() > session.expiry) {
+            localStorage.removeItem(AUTH_KEY);
+            return null;
+        }
+        return session;
+    } catch(e) { return null; }
+}
+
+function setAuthSession(password) {
+    localStorage.setItem(AUTH_KEY, JSON.stringify({
+        password: password,
+        expiry: Date.now() + AUTH_TTL
+    }));
+}
+
+function clearAuthSession() {
+    localStorage.removeItem(AUTH_KEY);
+}
+
+async function tryAutoLogin() {
+    const session = getAuthSession();
+    if (!session) return showAuthOverlay();
+    userPassword = session.password;
+    try {
+        const r = await fetch('/nas/api/auth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({password: session.password})
+        });
+        const d = await r.json();
+        if (!d.success) { clearAuthSession(); return showAuthOverlay(); }
+        await fetchConfig();
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        loadFiles('', true);
+        loadDashboard();
+        return true;
+    } catch(e) { clearAuthSession(); return showAuthOverlay(); }
+}
+
+function showAuthOverlay() {
+    document.getElementById('auth-overlay').style.display = 'flex';
+    return false;
+}
 
 async function fetchConfig() {
     try {
@@ -502,6 +554,7 @@ function checkAuth() {
             body: JSON.stringify({password: k})
         }).then(r => r.json()).then(d => {
             if (d.success) {
+                setAuthSession(k);
                 document.getElementById('auth-overlay').style.opacity = '0';
                 setTimeout(() => {
                     document.getElementById('auth-overlay').style.display = 'none';
@@ -535,6 +588,9 @@ function apiFetch(url, options = {}) {
 }
 
 document.getElementById('access-key').addEventListener('keypress', e => { if(e.key==='Enter') checkAuth(); });
+
+// Auto-login: check localStorage for valid session (5-minute TTL)
+tryAutoLogin();
 
 window.addEventListener('click', e => {
     document.getElementById('ctx-menu').style.display = 'none';
