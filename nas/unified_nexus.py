@@ -212,14 +212,21 @@ def download_file():
 
 @nas_bp.route('/api/shutdown', methods=['POST'])
 def shutdown_server():
-    logging.getLogger(__name__).info('Shutdown request received. Scheduling exit...')
+    logging.getLogger(__name__).info('Shutdown request received. Shutting down server...')
     
-    def exit_process():
-        time.sleep(1) # Give Flask time to send the response
-        os._exit(0)
-        
-    threading.Thread(target=exit_process).start()
-    return jsonify({"success": True, "message": "Server shutting down..."})
+    # Use Werkzeug's built-in shutdown mechanism instead of os._exit(0)
+    # which kills the entire Python process (including the GUI).
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func:
+        func()
+        return jsonify({"success": True, "message": "Server shutting down..."})
+    else:
+        # Fallback: use os._exit only if Werkzeug shutdown is unavailable
+        def exit_process():
+            time.sleep(1)
+            os._exit(0)
+        threading.Thread(target=exit_process).start()
+        return jsonify({"success": True, "message": "Server shutting down (emergency)..."})
 
 @nas_bp.route('/api/view')
 @require_auth
