@@ -291,6 +291,11 @@
                     <div class="value" id="dash-uptime">—</div>
                     <div class="sub">last boot unknown</div>
                 </div>
+                <div class="card">
+                    <div class="label">NAS Version</div>
+                    <div class="value" id="dash-version" style="font-size:1.2rem">—</div>
+                    <div class="sub" id="dash-release-date"></div>
+                </div>
             </div>
         </div>
 
@@ -482,6 +487,8 @@
 
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
 let ROOT = '';
+let NAS_VERSION = '';
+let NAS_RELEASE_DATE = '';
 let userPassword = '';
 const AUTH_TTL = 5 * 60 * 1000; // 5 minutes
 const AUTH_KEY = 'jnas_auth_session';
@@ -541,6 +548,8 @@ async function fetchConfig() {
         const r = await fetch('/nas/api/config?password=' + encodeURIComponent(userPassword));
         const d = await r.json();
         ROOT = d.root;
+        NAS_VERSION = d.version || '?';
+        NAS_RELEASE_DATE = d.release_date || '';
     } catch(e) { ROOT = '/home/jerry/workspace'; /* fallback */ }
 }
 
@@ -623,6 +632,8 @@ async function loadDashboard() {
         document.getElementById('dash-disk-detail').textContent = 'of ' + (d.disk.total_gb).toFixed(1) + ' GB';
         document.getElementById('dash-disk-bar').style.width = d.disk.percent + '%';
         document.getElementById('dash-uptime').textContent = d.uptime_human;
+        document.getElementById('dash-version').textContent = NAS_VERSION || '—';
+        document.getElementById('dash-release-date').textContent = NAS_RELEASE_DATE ? 'Released ' + NAS_RELEASE_DATE : '';
     } catch(e) { console.log('Dashboard load error:', e); }
 }
 

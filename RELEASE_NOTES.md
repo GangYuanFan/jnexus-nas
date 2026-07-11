@@ -1,0 +1,25 @@
+# J.NAS Release Notes
+
+## v1.0.0 (2026-07-11) — Initial Release
+
+### 🚀 NAS Server (Web Frontend)
+- **Dynamic root path** — Frontend fetches `ROOT_DIR` via `/nas/api/config` instead of hardcoding
+- **Unified path handling** — Service startup (`__main__`) now goes through `init_app()` for consistent configuration
+- **5-minute auto-login** — Password saved in `localStorage` with TTL; auto-authenticates on page refresh
+- **Dynamic breadcrumb** — Shows actual root directory name, not hardcoded `/ home`
+- **PDF zoom** — Zoom in/out buttons now actually resize the image display
+- **Graceful shutdown** — Uses Werkzeug's built-in shutdown instead of `os._exit(0)`
+
+### 🖥️ NAS Tool GUI (`nas_gui.exe`)
+- **Subprocess isolation** — Flask server runs in `multiprocessing.Process` instead of `threading.Thread`
+  - Pressing Stop Server no longer crashes the GUI window
+  - Process cleanup: API shutdown → SIGTERM → SIGKILL (3-layer safety)
+- **Configurable root path**, password, and port via GUI
+
+### 🔧 Infrastructure
+- **Environment variable support** — `NAS_ROOT_DIR`, `NAS_PASSWORD`, `NAS_PORT` for headless service startup
+- **Config API** — `/nas/api/config` exposes current root path, version, and release date
+- **Windows build** — PyInstaller spec and build script for `nas_gui.exe`
+
+### ⚠️ Known Issues
+- None at this time.

@@ -21,6 +21,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import Qt
 from PySide6 import QtGui
 
+# Version
+NAS_TOOL_VERSION = '1.0.0'
+NAS_TOOL_RELEASE_DATE = '2026-07-11'
+
 # Setup GUI Debug Logging
 logging.basicConfig(
     filename='nas_gui_debug.log',
@@ -46,7 +50,7 @@ def run_nas_server(root, password, port):
 class NasGui(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("J.NAS Server Controller")
+        self.setWindowTitle(f"J.NAS Server Controller v{NAS_TOOL_VERSION}")
         self.setFixedSize(500, 300)
         
         # Use a generic system icon

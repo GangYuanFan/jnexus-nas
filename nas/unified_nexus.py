@@ -3,6 +3,7 @@ import logging
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
+from . import __version__, RELEASE_DATE
 import psutil
 import platform
 import time
@@ -88,7 +89,11 @@ def serve_nas_index():
 @nas_bp.route('/api/config')
 def nas_config():
     """Return current NAS root path config."""
-    return jsonify({'root': ROOT_DIR})
+    return jsonify({
+        'root': ROOT_DIR,
+        'version': __version__,
+        'release_date': RELEASE_DATE
+    })
 
 @nas_bp.route('/api/sysinfo')
 def system_info():
