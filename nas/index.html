@@ -41,8 +41,32 @@
         /* Main - Adjust for thinner sidebar */
         #main { flex: 1; margin-left: 80px; padding: 2rem; max-width: 100%; overflow-x: hidden; }
         
-        /* Main */
-        #main { flex: 1; margin-left: 240px; padding: 2rem; max-width: 100%; overflow-x: hidden; }
+        /* Status Bar - Synology Style */
+        .status-bar { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.03); 
+            border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; 
+            margin-bottom: 2rem; backdrop-filter: blur(10px);
+        }
+        .status-bar .item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.6); }
+        .status-bar .health-dot { width: 8px; height: 8px; background: #4f8; border-radius: 50%; box-shadow: 0 0 8px #4f8; }
+
+        /* Storage Pool - Unraid Style */
+        .storage-pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .disk-block { 
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); 
+            border-radius: 16px; padding: 1rem; text-align: center; transition: all 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .disk-block:hover { background: rgba(255,255,255,0.06); transform: translateY(-2px); }
+        .disk-block .disk-label { font-size: 18px; font-weight: 800; margin-bottom: 8px; display: block; }
+        .disk-block .disk-usage { font-size: 12px; color: rgba(255,255,255,0.4); }
+        .disk-block .disk-bar-bg { height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+        .disk-block .disk-bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+        .disk-block .status-overlay { position: absolute; top: 0; right: 0; width: 4px; height: 100%; }
+
+
+
         .page { display: none; }
         .page.active { display: block; }
         
@@ -277,44 +301,56 @@
 
     <!-- Main -->
     <main id="main">
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="item"><div class="health-dot"></div> System Healthy</div>
+                <div class="item" id="status-time">Loading...</div>
+                <div class="item" id="status-storage">Storage: —</div>
+            </div>
 
-        <!-- Dashboard Page -->
-        <div class="page active" id="page-dashboard">
-            <div class="page-header">
-                <h2>Dashboard</h2>
-                <div class="breadcrumb">System Overview</div>
+            <!-- Dashboard Page -->
+            <div class="page active" id="page-dashboard">
+                <div class="page-header">
+                    <h2>Dashboard</h2>
+                    <div class="breadcrumb">System Overview</div>
+                </div>
+                
+                <!-- Storage Topology (Unraid Style) -->
+                <div class="label" style="font-size: 12px; color: rgba(255,255,255,0.3); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 1px;">Storage Topology</div>
+                <div id="storage-pool" class="storage-pool">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="card">
+                        <div class="label">CPU Usage</div>
+                        <div class="value" id="dash-cpu">—</div>
+                        <div class="sub">load average</div>
+                        <div class="bar"><div class="bar-fill" id="dash-cpu-bar" style="width:0%"></div></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Memory</div>
+                        <div class="value" id="dash-mem">—</div>
+                        <div class="sub" id="dash-mem-detail">—</div>
+                        <div class="bar"><div class="bar-fill" id="dash-mem-bar" style="width:0%"></div></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Network (S/R)</div>
+                        <div class="value" id="dash-net" style="font-size:1.4rem">—</div>
+                        <div class="sub">Total Data Transfer</div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Uptime</div>
+                        <div class="value" id="dash-uptime">—</div>
+                        <div class="sub">since last boot</div>
+                    </div>
+                    <div class="card">
+                        <div class="label">NAS Version</div>
+                        <div class="value" id="dash-version" style="font-size:1.2rem">—</div>
+                        <div class="sub" id="dash-release-date"></div>
+                    </div>
+                </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="card">
-                    <div class="label">CPU Usage</div>
-                    <div class="value" id="dash-cpu">—</div>
-                    <div class="sub">load average</div>
-                    <div class="bar"><div class="bar-fill" id="dash-cpu-bar" style="width:0%"></div></div>
-                </div>
-                <div class="card">
-                    <div class="label">Memory</div>
-                    <div class="value" id="dash-mem">—</div>
-                    <div class="sub" id="dash-mem-detail">—</div>
-                    <div class="bar"><div class="bar-fill" id="dash-mem-bar" style="width:0%"></div></div>
-                </div>
-                <div class="card">
-                    <div class="label">Disk</div>
-                    <div class="value" id="dash-disk">—</div>
-                    <div class="sub" id="dash-disk-detail">—</div>
-                    <div class="bar"><div class="bar-fill" id="dash-disk-bar" style="width:0%"></div></div>
-                </div>
-                <div class="card">
-                    <div class="label">Uptime</div>
-                    <div class="value" id="dash-uptime">—</div>
-                    <div class="sub">last boot unknown</div>
-                </div>
-                <div class="card">
-                    <div class="label">NAS Version</div>
-                    <div class="value" id="dash-version" style="font-size:1.2rem">—</div>
-                    <div class="sub" id="dash-release-date"></div>
-                </div>
-            </div>
-        </div>
 
         <!-- Files Page -->
         <div class="page" id="page-files">
@@ -640,19 +676,69 @@ async function loadDashboard() {
     try {
         const r = await apiFetch('/nas/api/sysinfo');
         const d = await r.json();
+        
+        // 1. Update basic stats
         document.getElementById('dash-cpu').textContent = d.cpu_percent.toFixed(1) + '%';
         document.getElementById('dash-cpu-bar').style.width = d.cpu_percent + '%';
         document.getElementById('dash-mem').textContent = (d.memory.used_gb).toFixed(1) + ' GB';
         document.getElementById('dash-mem-detail').textContent = 'of ' + (d.memory.total_gb).toFixed(1) + ' GB';
         document.getElementById('dash-mem-bar').style.width = d.memory.percent + '%';
-        document.getElementById('dash-disk').textContent = (d.disk.used_gb).toFixed(1) + ' GB';
-        document.getElementById('dash-disk-detail').textContent = 'of ' + (d.disk.total_gb).toFixed(1) + ' GB';
-        document.getElementById('dash-disk-bar').style.width = d.disk.percent + '%';
+        
+        // 2. Network Stats
+        const netS = (d.network.bytes_sent / 1024**3).toFixed(2);
+        const netR = (d.network.bytes_recv / 1024**3).toFixed(2);
+        document.getElementById('dash-net').textContent = `${netS}↑ ${netR}↓ GB`;
+
         document.getElementById('dash-uptime').textContent = d.uptime_human;
         document.getElementById('dash-version').textContent = NAS_VERSION || '—';
         document.getElementById('dash-release-date').textContent = NAS_RELEASE_DATE ? 'Released ' + NAS_RELEASE_DATE : '';
+
+        // 3. Storage Topology (Unraid Style)
+        const pool = document.getElementById('storage-pool');
+        if (pool) {
+            pool.innerHTML = '';
+            let totalCap = 0, totalUsed = 0;
+            
+            if (!d.disks || d.disks.length === 0) {
+                pool.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align:center; opacity:0.5">No mounted disks found in /mnt/[a-z]</div>';
+            } else {
+                d.disks.forEach(disk => {
+                    totalCap += disk.total_gb;
+                    totalUsed += disk.used_gb;
+                    
+                    let color = '#4f8'; // Healthy
+                    if (disk.percent > 80) color = '#f55'; // Critical
+                    else if (disk.percent > 60) color = '#ffc'; // Warning
+                    
+                    const block = document.createElement('div');
+                    block.className = 'disk-block';
+                    block.innerHTML = `
+                        <span class="disk-label">${disk.label}</span>
+                        <span class="disk-usage">${disk.used_gb.toFixed(1)} / ${disk.total_gb.toFixed(1)} GB</span>
+                        <div class="disk-bar-bg"><div class="disk-bar-fill" style="width:${disk.percent}%; background:${color}"></div></div>
+                        <div class="status-overlay" style="background:${color}"></div>
+                    `;
+                    pool.appendChild(block);
+                });
+            }
+            // Update status bar storage info
+            const totalPct = totalCap > 0 ? (totalUsed / totalCap * 100).toFixed(1) : 0;
+            document.getElementById('status-storage').textContent = `Storage: ${totalPct}% used (${(totalUsed/1024).toFixed(1)} TB / ${(totalCap/1024).toFixed(1)} TB)`;
+        }
+        
+        updateStatusBar();
     } catch(e) { console.log('Dashboard load error:', e); }
 }
+
+function updateStatusBar() {
+    const now = new Date();
+    document.getElementById('status-time').textContent = now.toLocaleString();
+}
+
+// Add auto-refresh for dashboard
+setInterval(loadDashboard, 2000);
+setInterval(updateStatusBar, 1000);
+
 
 async function loadSystemInfo() {
     const el = document.getElementById('sys-content');

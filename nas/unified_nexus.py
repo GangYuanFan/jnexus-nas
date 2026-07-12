@@ -13,6 +13,8 @@ import os
 import sys
 import io
 import threading
+import glob
+import subprocess
 from pathlib import Path
 from functools import wraps
 
@@ -99,21 +101,43 @@ def nas_config():
 
 @nas_bp.route('/api/sysinfo')
 def system_info():
-    cpu_percent = psutil.cpu_percent(interval=0.5)
+    cpu_percent = psutil.cpu_percent(interval=0.1)
     cpu_count = psutil.cpu_count()
     mem = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
+    
+    # 1. 儲存拓樸掃描 (使用 glob.glob 以相容 WSL)
+    disks = []
+    import glob, os
+    try:
+        # We search /mnt/* and check if they are directories
+        for path in sorted(glob.glob('/mnt/*')):
+            if os.path.isdir(path):
+                try:
+                    usage = psutil.disk_usage(path)
+                    label = path.split('/')[-1].upper()
+                    disks.append({
+                        'mount': path, 'label': label,
+                        'total_gb': usage.total / 1024**3, 'used_gb': usage.used / 1024**3, 'percent': usage.percent
+                    })
+                except: pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f'Error scanning disks: {e}')
+
+    # 2. 其他監控
+    net = psutil.net_io_counters()
     boot_time = psutil.boot_time()
     uptime_seconds = time.time() - boot_time
-    uptime_human = f"{int(uptime_seconds // 86400)}d {int((uptime_seconds % 86400) // 3600)}h {int((uptime_seconds % 3600) // 60)}m"
+    uptime_human = f'{int(uptime_seconds // 86400)}d {int((uptime_seconds % 86400) // 3600)}h {int((uptime_seconds % 3600) // 60)}m'
+    
     return jsonify({
-        "cpu_percent": cpu_percent, "cpu_count": cpu_count,
-        "platform": platform.platform(), "hostname": platform.node(),
-        "memory": {"total_gb": mem.total / 1024**3, "used_gb": (mem.total - mem.available) / 1024**3, "percent": mem.percent},
-        "disk": {"total_gb": disk.total / 1024**3, "used_gb": disk.used / 1024**3, "percent": disk.percent},
-        "uptime_human": uptime_human
+        'cpu_percent': cpu_percent, 'cpu_count': cpu_count,
+        'platform': platform.platform(), 'hostname': platform.node(),
+        'memory': {'total_gb': mem.total / 1024**3, 'used_gb': (mem.total - mem.available) / 1024**3, 'percent': mem.percent},
+        'disks': disks,
+        'network': {'bytes_sent': net.bytes_sent, 'bytes_recv': net.bytes_recv},
+        'uptime_human': uptime_human
     })
-
 @nas_bp.route('/api/read')
 @require_auth
 def read_file():
