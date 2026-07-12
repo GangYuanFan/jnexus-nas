@@ -4,8 +4,8 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Bluep
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.0.0'
-RELEASE_DATE = '2026-07-11'
+__version__ = '1.0.1'
+RELEASE_DATE = '2026-07-12'
 import psutil
 import platform
 import time
@@ -39,6 +39,7 @@ def init_app(root, password, port):
     NAS_PASSWORD = password
     logger.info(f'NAS App initialized with absolute root={ROOT_DIR}, port={port}')
 
+
 def resolve_path(path):
     logger.info(f'[PATH-DEBUG] Input path: "{path}", Current ROOT_DIR: "{ROOT_DIR}"')
     if not path:
@@ -46,14 +47,23 @@ def resolve_path(path):
     elif os.path.isabs(path) and path.startswith(ROOT_DIR):
         res = os.path.normpath(path)
     else:
-        # Handle potential Windows-style absolute paths from GUI
         clean_path = path
         if ':' in path:
             parts = path.split(':', 1)
             if len(parts) == 2:
                 clean_path = parts[1].lstrip('\\/')
         
+        # Primary attempt: Join with ROOT_DIR
         res = os.path.normpath(os.path.join(ROOT_DIR, clean_path.lstrip('/')))
+        
+        # Smart Fallback: If file doesn't exist, try searching in the NAS app directory
+        if not os.path.exists(res):
+            nas_app_dir = os.path.join(ROOT_DIR, 'nas_tool', 'nas')
+            fallback_res = os.path.normpath(os.path.join(nas_app_dir, clean_path.lstrip('/')))
+            if os.path.exists(fallback_res):
+                logger.info(f'[PATH-DEBUG] Primary failed, fallback success: {fallback_res}')
+                res = fallback_res
+                
     logger.info(f'[PATH-DEBUG] Resolved to: "{res}"')
     return res
 
@@ -99,45 +109,99 @@ def nas_config():
         'release_date': RELEASE_DATE
     })
 
+
 @nas_bp.route('/api/sysinfo')
+@require_auth
 def system_info():
+    """Return system info with cross-platform physical disk detection."""
+    # Collect all mount candidates
+    all_candidates = list(psutil.disk_partitions())
+
+    # WSL fallback: scan /mnt for Windows drives that psutil may miss
+    for mp in sorted(glob.glob('/mnt/*')):
+        if os.path.isdir(mp):
+            class P:
+                def __init__(self, mountpoint, device, fstype, opts):
+                    self.mountpoint = mountpoint
+                    self.device = device
+                    self.fstype = fstype
+                    self.opts = opts
+            all_candidates.append(P(mp, mp, 'drvfs', 'rw'))
+
+    # Fingerprint-based dedup + system noise filter
+    seen_mounts = set()
+    seen_fingerprints = set()
+    disks = []
+
+    # Sort: drive letters (C, D, etc) first so they survive dedup
+    order = sorted(all_candidates, key=lambda x: ('/' not in x.mountpoint and len(x.mountpoint) <= 3, x.mountpoint), reverse=True)
+
+    for p in order:
+        mount = p.mountpoint
+        if mount in seen_mounts:
+            continue
+        seen_mounts.add(mount)
+
+        # Skip system-virt FS types
+        fstype_lower = (p.fstype or '').lower()
+        if any(x in fstype_lower for x in ['tmpfs', 'squashfs', 'devtmpfs', 'loop', 'overlay']):
+            continue
+
+        # Skip system root and internal WSL paths
+        if mount == '/' or 'wslg' in mount or 'distro' in mount.lower() or 'snap' in mount.lower():
+            continue
+
+        try:
+            usage = psutil.disk_usage(mount)
+        except (PermissionError, OSError):
+            continue
+
+        # Skip truly tiny partitions (< 10 GB) — likely system partitions
+        if usage.total < 10 * 1024**3:
+            continue
+
+        # Label derivation
+        label = mount.split('/')[-1] if '/' in mount else mount
+        if not label:
+            label = mount
+        label = label.upper()
+
+        # Fingerprint dedup
+        fp = (round(usage.total / 1024**3, 2), round(usage.used / 1024**3, 2))
+        if fp in seen_fingerprints:
+            continue
+        seen_fingerprints.add(fp)
+
+        disks.append({
+            'mount': mount, 'label': label,
+            'total_gb': usage.total / 1024**3,
+            'used_gb': usage.used / 1024**3,
+            'percent': usage.percent
+        })
+
     cpu_percent = psutil.cpu_percent(interval=0.1)
     cpu_count = psutil.cpu_count()
     mem = psutil.virtual_memory()
-    
-    # 1. 儲存拓樸掃描 (使用 glob.glob 以相容 WSL)
-    disks = []
-    import glob, os
-    try:
-        # We search /mnt/* and check if they are directories
-        for path in sorted(glob.glob('/mnt/*')):
-            if os.path.isdir(path):
-                try:
-                    usage = psutil.disk_usage(path)
-                    label = path.split('/')[-1].upper()
-                    disks.append({
-                        'mount': path, 'label': label,
-                        'total_gb': usage.total / 1024**3, 'used_gb': usage.used / 1024**3, 'percent': usage.percent
-                    })
-                except: pass
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f'Error scanning disks: {e}')
-
-    # 2. 其他監控
     net = psutil.net_io_counters()
     boot_time = psutil.boot_time()
     uptime_seconds = time.time() - boot_time
     uptime_human = f'{int(uptime_seconds // 86400)}d {int((uptime_seconds % 86400) // 3600)}h {int((uptime_seconds % 3600) // 60)}m'
-    
+
     return jsonify({
         'cpu_percent': cpu_percent, 'cpu_count': cpu_count,
         'platform': platform.platform(), 'hostname': platform.node(),
-        'memory': {'total_gb': mem.total / 1024**3, 'used_gb': (mem.total - mem.available) / 1024**3, 'percent': mem.percent},
+        'memory': {
+            'total_gb': mem.total / 1024**3,
+            'used_gb': (mem.total - mem.available) / 1024**3,
+            'percent': mem.percent
+        },
         'disks': disks,
         'network': {'bytes_sent': net.bytes_sent, 'bytes_recv': net.bytes_recv},
         'uptime_human': uptime_human
     })
+
+
+
 @nas_bp.route('/api/read')
 @require_auth
 def read_file():
@@ -172,6 +236,7 @@ def list_files():
     path = request.args.get('path', '')
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
+    if not os.path.isdir(full_path): return jsonify({"error": "Path is not a directory"}), 400
     try:
         files = []
         for entry in os.scandir(full_path):

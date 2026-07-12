@@ -11,6 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="J.NAS">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
     <script>
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
@@ -758,7 +759,7 @@ async function loadDashboard() {
             let totalCap = 0, totalUsed = 0;
             
             if (!d.disks || d.disks.length === 0) {
-                pool.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align:center; opacity:0.5">No mounted disks found in /mnt/[a-z]</div>';
+                pool.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align:center; opacity:0.5">No physical disks found in system storage</div>';
             } else {
                 d.disks.forEach(disk => {
                     totalCap += disk.total_gb;
@@ -803,11 +804,12 @@ async function loadSystemInfo() {
     try {
         const r = await apiFetch('/nas/api/sysinfo');
         const d = await r.json();
+        const mainDisk = (d.disks && d.disks.length > 0) ? d.disks[0] : {total_gb: 0, used_gb: 0};
         el.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
             '<div class="card"><div class="label">CPU</div><div class="value">' + d.cpu_count + ' cores</div><div class="sub">' + d.cpu_percent.toFixed(1) + '% utilized</div></div>' +
             '<div class="card"><div class="label">Platform</div><div class="value" style="font-size:1.2rem">' + d.platform + '</div><div class="sub">' + d.hostname + '</div></div>' +
             '<div class="card"><div class="label">Memory</div><div class="value">' + (d.memory.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (d.memory.used_gb).toFixed(1) + ' GB used</div></div>' +
-            '<div class="card"><div class="label">Disk</div><div class="value">' + (d.disk.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (d.disk.used_gb).toFixed(1) + ' GB used</div></div>' +
+            '<div class="card"><div class="label">Disk</div><div class="value">' + (mainDisk.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (mainDisk.used_gb).toFixed(1) + ' GB used</div></div>' +
             '</div>';
     } catch(e) { el.innerHTML = '<div class="card">Failed to load system info.</div>'; }
 }
@@ -890,6 +892,11 @@ function getFileIcon(n, d, fp) {
 
 function renderFiles(files) {
     const grid = document.getElementById('file-grid');
+    if (!Array.isArray(files)) {
+        const errMsg = (files && files.error) ? files.error : 'Error loading files';
+        grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">' + errMsg + '</div>';
+        return;
+    }
     if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
     grid.className = 'file-grid' + (isGrid ? ' grid' : '');
     grid.innerHTML = '';
@@ -1082,17 +1089,24 @@ function isEditable(name) {
 }
 
 async function openEditor(path) {
+    console.log('[NAS-DEBUG] openEditor started for path:', path);
     try {
         currentEditingPath = path;
         const box = document.getElementById('monaco-box');
-        box.innerHTML = '';
+        if (!box) { throw new Error('Editor container not found'); }
+        
+        box.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        
         const r = await apiFetch('/nas/api/read?path=' + encodeURIComponent(path));
+        if (!r.ok) {
+            const errData = await r.json().catch(() => ({error: 'Unknown error'}));
+            throw new Error(errData.error || 'Failed to read file');
+        }
         const content = await r.text();
         
         const displayPath = (ROOT.endsWith('/') ? ROOT : ROOT + '/') + (path.startsWith('/') ? path.slice(1) : path);
         document.getElementById('editor-path').textContent = displayPath;
         
-        // Determine Monaco language based on extension
         const ext = path.split('.').pop().toLowerCase();
         const langMap = {
             'py': 'python', 'js': 'javascript', 'ts': 'typescript', 'html': 'html', 
@@ -1102,18 +1116,32 @@ async function openEditor(path) {
         const language = langMap[ext] || 'plaintext';
         
         document.getElementById('editor-overlay').style.display = 'block';
-        setTimeout(() => {
-            editor = monaco.editor.create(box, { 
-                value: content, 
-                language: language, 
-                theme: 'vs-dark', 
-                automaticLayout: true,
-                fontSize: 14,
-                minimap: { enabled: false }
-            });
-            document.getElementById('btn-save').onclick = saveFile;
-        }, 80);
-    } catch(e) { alert('Error: ' + e.message); }
+        
+        // Use require to ensure monaco is loaded before creating the editor
+        require(['vs/editor/editor.main'], function() {
+            console.log('[NAS-DEBUG] Monaco module loaded, creating editor...');
+            box.innerHTML = ''; 
+            try {
+                editor = monaco.editor.create(box, { 
+                    value: content, 
+                    language: language, 
+                    theme: 'vs-dark', 
+                    automaticLayout: true,
+                    fontSize: 14,
+                    minimap: { enabled: false }
+                });
+                document.getElementById('btn-save').onclick = saveFile;
+                console.log('[NAS-DEBUG] Monaco editor created successfully.');
+            } catch (createErr) {
+                console.error('[NAS-DEBUG] monaco.editor.create failed:', createErr);
+                alert('❌ Failed to initialize editor: ' + createErr.message);
+            }
+        });
+    } catch(e) { 
+        console.error('[NAS-DEBUG] openEditor catch block:', e);
+        document.getElementById('editor-overlay').style.display = 'none';
+        alert('❌ Editor Error: ' + e.message); 
+    }
 }
 
 function openMediaPlayer(path, type) {
