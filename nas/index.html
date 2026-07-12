@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="J.NAS">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
@@ -326,13 +326,13 @@
                         <div class="label">CPU Usage</div>
                         <div class="value" id="dash-cpu">—</div>
                         <div class="sub">load average</div>
-                        <div class="bar"><div class="bar-fill" id="dash-cpu-bar" style="width:0%"></div></div>
+                        <div class="bar" style="height: 60px; background:none; border:none; margin: 0;"><canvas id="cpu-chart"></canvas></div>
                     </div>
                     <div class="card">
                         <div class="label">Memory</div>
                         <div class="value" id="dash-mem">—</div>
                         <div class="sub" id="dash-mem-detail">—</div>
-                        <div class="bar"><div class="bar-fill" id="dash-mem-bar" style="width:0%"></div></div>
+                        <div class="bar" style="height: 60px; background:none; border:none; margin: 0;"><canvas id="mem-chart"></canvas></div>
                     </div>
                     <div class="card">
                         <div class="label">Network (S/R)</div>
@@ -539,6 +539,8 @@
 
 
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
+let cpuChart, memChart; // Chart instances
+
 let ROOT = '';
 let NAS_VERSION = '';
 let NAS_RELEASE_DATE = '';
@@ -585,6 +587,7 @@ async function tryAutoLogin() {
         await fetchConfig();
         document.getElementById('auth-overlay').style.display = 'none';
         document.getElementById('app').style.display = 'flex';
+        initCharts(); // Initialize charts
         loadFiles('', true);
         loadDashboard();
         return true;
@@ -658,6 +661,62 @@ window.addEventListener('click', e => {
     document.getElementById('ctx-menu').style.display = 'none';
 });
 
+function initCharts() {
+    const chartConfig = (label, color) => ({
+        type: 'line',
+        data: {
+            labels: Array(20).fill(''),
+            datasets: [{
+                label: label,
+                data: Array(20).fill(null),
+                borderColor: color,
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.4,
+                fill: true,
+                backgroundColor: 'rgba(0,0,0,0)', // Will be updated with gradient in actual draw
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false, min: 0, max: 100 }
+            },
+            animation: { duration: 0 }
+        }
+    });
+
+    const ctxCpu = document.getElementById('cpu-chart').getContext('2d');
+    const gradCpu = ctxCpu.createLinearGradient(0, 0, 0, 60);
+    gradCpu.addColorStop(0, 'rgba(79, 255, 136, 0.3)');
+    gradCpu.addColorStop(1, 'rgba(79, 255, 136, 0)');
+    
+    cpuChart = new Chart(ctxCpu, chartConfig('CPU', '#4f8'));
+    cpuChart.data.datasets[0].backgroundColor = gradCpu;
+
+    const ctxMem = document.getElementById('mem-chart').getContext('2d');
+    const gradMem = ctxMem.createLinearGradient(0, 0, 0, 60);
+    gradMem.addColorStop(0, 'rgba(0, 170, 255, 0.3)');
+    gradMem.addColorStop(1, 'rgba(0, 170, 255, 0)');
+    
+    memChart = new Chart(ctxMem, chartConfig('Memory', '#0af'));
+    memChart.data.datasets[0].backgroundColor = gradMem;
+}
+
+function updateCharts(cpu, mem) {
+    if (!cpuChart || !memChart) return;
+    
+    [cpuChart, memChart].forEach((chart, i) => {
+        const val = i === 0 ? cpu : mem;
+        chart.data.datasets[0].data.push(val);
+        if (chart.data.datasets[0].data.length > 20) chart.data.datasets[0].data.shift();
+        chart.update('none');
+    });
+}
+
 function switchPage(name) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -679,10 +738,9 @@ async function loadDashboard() {
         
         // 1. Update basic stats
         document.getElementById('dash-cpu').textContent = d.cpu_percent.toFixed(1) + '%';
-        document.getElementById('dash-cpu-bar').style.width = d.cpu_percent + '%';
+        updateCharts(d.cpu_percent, d.memory.percent); // 同步更新曲線圖
         document.getElementById('dash-mem').textContent = (d.memory.used_gb).toFixed(1) + ' GB';
         document.getElementById('dash-mem-detail').textContent = 'of ' + (d.memory.total_gb).toFixed(1) + ' GB';
-        document.getElementById('dash-mem-bar').style.width = d.memory.percent + '%';
         
         // 2. Network Stats
         const netS = (d.network.bytes_sent / 1024**3).toFixed(2);
