@@ -1,5 +1,19 @@
 # J.NAS Release Notes
 
+## v1.0.1 (2026-07-12) — Stability & Security Update
+
+### 🛠️ Bug Fixes
+- **Monaco Editor Recovery** — Fixed "failed to load" error by introducing `loader.min.js` and explicit module loading
+- **Path Resolution Fallback** — Implemented Smart Path Fallback in backend to resolve 404 errors when accessing files relative to the app directory
+- **System Info UI Fix** — Corrected disk array referencing in frontend to prevent "Failed to load system info" crash
+- **Security Hardening** — Added `@require_auth` to `/nas/api/sysinfo` endpoint to prevent unauthorized access
+- **Boundary Handling** — Fixed 500 error when requesting a file as a directory in `/nas/api/files`
+
+### 📦 Version Bump
+- Bumped all project version strings to `1.0.1`
+
+---
+
 ## v1.0.0 (2026-07-11) — Initial Release
 
 ### 🚀 NAS Server (Web Frontend)

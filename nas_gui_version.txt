@@ -16,12 +16,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', ''),
         StringStruct('FileDescription', 'J.NAS Server Controller'),
-        StringStruct('FileVersion', '1.0.0'),
+        StringStruct('FileVersion', '1.0.1'),
         StringStruct('InternalName', 'nas_gui'),
         StringStruct('LegalCopyright', ''),
         StringStruct('OriginalFilename', 'nas_gui.exe'),
         StringStruct('ProductName', 'J.NAS Server Controller'),
-        StringStruct('ProductVersion', '1.0.0'),
+        StringStruct('ProductVersion', '1.0.1'),
         StringStruct('BuildDate', '2026-07-11')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

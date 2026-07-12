@@ -4,7 +4,7 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
-# 1.0.0 (2026-07-11) - Initial release
+# 1.0.1 (2026-07-12) - Fix Monaco Editor, Path Fallback, and System Info UI
 # - Unified NAS root path handling (frontend dynamically fetches via /api/config)
 # - Service startup goes through init_app() for consistent path management
 # - NAS Tool GUI runs Flask server in subprocess (no more window crash on Stop)
