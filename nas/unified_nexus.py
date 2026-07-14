@@ -266,10 +266,21 @@ def upload_file():
     file = request.files['file']
     path = request.form.get('path', '')
     full_dir = resolve_path(path)
-    full_path = os.path.join(full_dir, file.filename)
+    
+    # Handle duplicate filenames by adding numerical suffix
+    filename = file.filename
+    name, ext = os.path.splitext(filename)
+    full_path = os.path.join(full_dir, filename)
+    
+    counter = 1
+    while os.path.exists(full_path):
+        new_filename = f"{name}_{counter}{ext}"
+        full_path = os.path.join(full_dir, new_filename)
+        counter += 1
+        
     try:
         file.save(full_path)
-        return jsonify({"success": True})
+        return jsonify({"success": True, "saved_path": full_path})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 @nas_bp.route('/api/delete', methods=['POST'])
@@ -610,10 +621,33 @@ def pwa_sw():
 
 app.register_blueprint(nas_bp)
 
-@app.route('/')
-@app.route('/nas')
-def redirect_to_nas():
-    return redirect('/nas/', code=301)
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def proxy_to_finance(path):
+    # Ensure NAS routes are handled by the blueprint
+    if path == 'nas' or path.startswith('nas/'):
+        return redirect('/nas/', code=301)
+    
+    finance_url = f'http://localhost:5000/{path}'
+    try:
+        # Proxy the request to the Finance server
+        resp = requests.request(
+            method=request.method,
+            url=finance_url,
+            headers={k: v for k, v in request.headers if k.lower() != 'host'},
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False
+        )
+        
+        # Filter out hop-by-hop headers and headers the proxy will regenerate
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'date', 'server']
+        headers = [(k, v) for k, v in resp.raw.headers.items() if k.lower() not in excluded_headers]
+        
+        return Response(resp.content, resp.status_code, headers)
+    except Exception as e:
+        logger.error(f"Proxy error: {e}")
+        return jsonify({"error": "Finance server unreachable"}), 502
 
 if __name__ == '__main__':
     # When run directly (e.g. via jnexus.service), go through init_app()
