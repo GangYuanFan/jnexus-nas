@@ -4,6 +4,13 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
+# 1.1.0 (2026-07-15) - Resource Recycle Bin + Feature Release
+# - New: Trash can system — deleted files/folders go to .trash directory
+# - New: Trash UI in sidebar — list, restore, permanent delete, empty all
+# - Files restore to original location with auto parent directory recreation
+# - Filename conflict resolution with _restored_N suffix
+# - Server config version bumped to 1.1.0
+#
 # 1.0.1 (2026-07-12) - Fix Monaco Editor, Path Fallback, and System Info UI
 # - Unified NAS root path handling (frontend dynamically fetches via /api/config)
 # - Service startup goes through init_app() for consistent path management

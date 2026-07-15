@@ -1,11 +1,12 @@
 import requests
 import logging
+import json
 from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.0.1'
-RELEASE_DATE = '2026-07-12'
+__version__ = '1.1.0'
+RELEASE_DATE = '2026-07-15'
 import psutil
 import platform
 import time
@@ -39,6 +40,26 @@ def init_app(root, password, port):
     NAS_PASSWORD = password
     logger.info(f'NAS App initialized with absolute root={ROOT_DIR}, port={port}')
 
+
+# --- TRASH CONFIG ---
+TRASH_DIR = os.path.join(ROOT_DIR, '.trash')
+TRASH_META_FILE = os.path.join(TRASH_DIR, '.trash_meta.json')
+
+def get_trash_meta():
+    """Load trash metadata JSON."""
+    if not os.path.exists(TRASH_META_FILE):
+        return {'items': []}
+    try:
+        with open(TRASH_META_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {'items': []}
+
+def save_trash_meta(meta):
+    """Save trash metadata JSON."""
+    os.makedirs(TRASH_DIR, exist_ok=True)
+    with open(TRASH_META_FILE, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
 
 def resolve_path(path):
     logger.info(f'[PATH-DEBUG] Input path: "{path}", Current ROOT_DIR: "{ROOT_DIR}"')
@@ -290,10 +311,176 @@ def delete_item():
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     try:
-        if os.path.isdir(full_path): import shutil; shutil.rmtree(full_path)
-        else: os.remove(full_path)
-        return jsonify({"success": True})
+        # Move to trash instead of permanent delete
+        os.makedirs(TRASH_DIR, exist_ok=True)
+        
+        # Get relative path for metadata (to restore later)
+        rel_path = os.path.relpath(full_path, ROOT_DIR)
+        
+        # Generate unique trash name with timestamp
+        ts = int(time.time() * 1000)
+        base_name = os.path.basename(full_path)
+        trash_name = f"{base_name}_{ts}"
+        trash_path = os.path.join(TRASH_DIR, trash_name)
+        
+        # Move to trash
+        import shutil
+        shutil.move(full_path, trash_path)
+        
+        # Record metadata
+        meta = get_trash_meta()
+        meta['items'].append({
+            'trash_name': trash_name,
+            'original_path': rel_path,
+            'is_dir': os.path.isdir(trash_path),
+            'deleted_at': time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(ts / 1000)),
+            'size': os.path.getsize(trash_path) if os.path.isfile(trash_path) else None
+        })
+        save_trash_meta(meta)
+        
+        return jsonify({"success": True, "trashed": trash_name})
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+
+# === TRASH API ===
+
+@nas_bp.route('/api/trash/list', methods=['GET'])
+@require_auth
+def trash_list():
+    """List all items in the trash."""
+    meta = get_trash_meta()
+    # Validate each item still physically exists
+    valid_items = []
+    for item in meta.get('items', []):
+        trash_full = os.path.join(TRASH_DIR, item['trash_name'])
+        if os.path.exists(trash_full):
+            valid_items.append(item)
+        else:
+            logger.warning(f"Trash item missing from disk: {item['trash_name']}")
+    
+    if len(valid_items) != len(meta.get('items', [])):
+        meta['items'] = valid_items
+        save_trash_meta(meta)
+    
+    return jsonify({'items': sorted(valid_items, key=lambda x: x.get('deleted_at', ''), reverse=True)})
+
+
+@nas_bp.route('/api/trash/restore', methods=['POST'])
+@require_auth
+def trash_restore():
+    """Restore a single item from trash to its original location."""
+    trash_name = request.json.get('trash_name', '')
+    if not trash_name:
+        return jsonify({"error": "Missing trash_name"}), 400
+    
+    meta = get_trash_meta()
+    item = None
+    for idx, it in enumerate(meta.get('items', [])):
+        if it['trash_name'] == trash_name:
+            item = it
+            item_idx = idx
+            break
+    
+    if not item:
+        return jsonify({"error": "Item not found in trash metadata"}), 404
+    
+    trash_full = os.path.join(TRASH_DIR, item['trash_name'])
+    if not os.path.exists(trash_full):
+        meta['items'].pop(item_idx)
+        save_trash_meta(meta)
+        return jsonify({"error": "Item no longer exists on disk"}), 404
+    
+    # Compute original full path
+    original_full = os.path.join(ROOT_DIR, item['original_path'])
+    original_dir = os.path.dirname(original_full)
+    
+    # Create parent directory if it no longer exists
+    os.makedirs(original_dir, exist_ok=True)
+    
+    # Handle filename conflict at destination
+    if os.path.exists(original_full):
+        base, ext = os.path.splitext(item['original_path'])
+        counter = 1
+        while True:
+            new_name = f"{base}_restored_{counter}{ext}"
+            candidate = os.path.join(ROOT_DIR, new_name)
+            if not os.path.exists(candidate):
+                original_full = candidate
+                break
+            counter += 1
+        logger.info(f"Restore conflict resolved: renamed to {original_full}")
+    
+    import shutil
+    shutil.move(trash_full, original_full)
+    
+    # Remove from metadata
+    meta['items'].pop(item_idx)
+    save_trash_meta(meta)
+    
+    return jsonify({"success": True, "restored_to": os.path.relpath(original_full, ROOT_DIR)})
+
+
+@nas_bp.route('/api/trash/permanent-delete', methods=['POST'])
+@require_auth
+def trash_permanent_delete():
+    """Permanently delete a single item from trash."""
+    trash_name = request.json.get('trash_name', '')
+    if not trash_name:
+        return jsonify({"error": "Missing trash_name"}), 400
+    
+    trash_full = os.path.join(TRASH_DIR, trash_name)
+    
+    # Delete from disk
+    try:
+        if os.path.isdir(trash_full):
+            import shutil
+            shutil.rmtree(trash_full)
+        elif os.path.isfile(trash_full):
+            os.remove(trash_full)
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete from disk: {str(e)}"}), 500
+    
+    # Remove from metadata
+    meta = get_trash_meta()
+    meta['items'] = [it for it in meta.get('items', []) if it['trash_name'] != trash_name]
+    save_trash_meta(meta)
+    
+    return jsonify({"success": True})
+
+
+@nas_bp.route('/api/trash/empty', methods=['POST'])
+@require_auth
+def trash_empty():
+    """Empty entire trash — permanently delete everything."""
+    meta = get_trash_meta()
+    errors = []
+    
+    for item in meta.get('items', []):
+        trash_full = os.path.join(TRASH_DIR, item['trash_name'])
+        try:
+            if os.path.isdir(trash_full):
+                import shutil
+                shutil.rmtree(trash_full)
+            elif os.path.isfile(trash_full):
+                os.remove(trash_full)
+        except Exception as e:
+            errors.append(item['trash_name'])
+            logger.warning(f"Failed to delete {item['trash_name']}: {e}")
+    
+    # Clear metadata
+    meta['items'] = []
+    save_trash_meta(meta)
+    
+    # Also clean up the trash directory itself if empty
+    try:
+        if os.path.isdir(TRASH_DIR) and not os.listdir(TRASH_DIR):
+            os.rmdir(TRASH_DIR)
+    except Exception:
+        pass
+    
+    if errors:
+        return jsonify({"success": True, "warning": f"{len(errors)} item(s) could not be deleted"})
+    return jsonify({"success": True})
 
 @nas_bp.route('/api/rename', methods=['POST'])
 @require_auth

@@ -1,5 +1,21 @@
 # J.NAS Release Notes
 
+## v1.1.0 (2026-07-15) — Trash Can + Feature Release
+
+### 🗑️ New: Resource Recycle Bin (Trash)
+- **Delete to trash** — Files & folders now go to a `.trash` directory instead of permanent deletion
+- **Trash UI** — New sidebar page listing all trashed items with original path, deletion time, and size
+- **Restore** — One-click restore to original location (auto-recreates missing parent directories)
+- **Permanent delete** — Delete individual items from trash permanently
+- **Empty Trash** — Bulk permanent deletion with double confirmation
+- **Filename conflict handling** — Restored files get `_restored_N` suffix if original path already exists
+- **Folder support** — Directories with sub-items are supported (recursive move/restore)
+
+### 📦 Version Bump
+- Bumped all project version strings to `1.1.0`
+
+---
+
 ## v1.0.1 (2026-07-12) — Stability & Security Update
 
 ### 🛠️ Bug Fixes

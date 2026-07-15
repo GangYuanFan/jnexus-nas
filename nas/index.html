@@ -113,6 +113,23 @@
         .file-grid.grid .file-entry .size { display: none; }
         .file-grid.grid .file-entry .actions { position: absolute; top: 6px; right: 6px; }
         .file-grid.grid .file-entry { position: relative; }
+
+        /* Trash page styles */
+        .trash-entry { display: flex; align-items: center; padding: 10px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04); gap: 12px; transition: background 0.15s; }
+        .trash-entry:hover { background: rgba(255,255,255,0.05); }
+        .trash-entry .icon { font-size: 22px; width: 36px; text-align: center; flex-shrink: 0; }
+        .trash-entry .info { flex: 1; min-width: 0; }
+        .trash-entry .info .name { font-size: 14px; font-weight: 500; color: #e0e0ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trash-entry .info .path { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trash-entry .info .meta { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 2px; }
+        .trash-entry .actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .trash-entry .actions button { padding: 4px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); font-size: 12px; cursor: pointer; transition: all 0.15s; font-weight: 500; }
+        .trash-entry .actions .btn-restore { background: rgba(0,242,255,0.1); color: #00f2ff; border-color: rgba(0,242,255,0.15); }
+        .trash-entry .actions .btn-restore:hover { background: rgba(0,242,255,0.2); }
+        .trash-entry .actions .btn-permdelete { background: rgba(255,50,50,0.1); color: #ff5252; border-color: rgba(255,50,50,0.15); }
+        .trash-entry .actions .btn-permdelete:hover { background: rgba(255,50,50,0.2); }
+        .trash-empty-msg { text-align: center; padding: 4rem 1rem; color: rgba(255,255,255,0.25); font-size: 14px; }
+        .trash-empty-msg .big-icon { font-size: 48px; margin-bottom: 12px; }
         
         /* Context Menu */
         #ctx-menu { position: fixed; z-index: 200; background: rgba(18,18,30,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; width: 160px; display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.6); overflow: hidden; }
@@ -298,6 +315,7 @@
         <a class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')">📊 <span>Dashboard</span></a>
         <a class="nav-item" data-page="files" onclick="switchPage('files')">📁 <span>Files</span></a>
         <a class="nav-item" data-page="system" onclick="switchPage('system')">⚙️ <span>System</span></a>
+        <a class="nav-item" data-page="trash" onclick="switchPage('trash')">🗑️ <span>Trash</span></a>
     </nav>
 
     <!-- Main -->
@@ -400,6 +418,24 @@
                 <div class="breadcrumb">Hardware & Software Details</div>
             </div>
             <div id="sys-content">Loading...</div>
+        </div>
+
+        <!-- Trash Page -->
+        <div class="page" id="page-trash">
+            <div class="page-header">
+                <h2>🗑️ Trash</h2>
+                <div class="breadcrumb">Deleted files & folders — restore or permanently remove</div>
+            </div>
+            
+            <div class="toolbar">
+                <button onclick="trashEmpty()" id="btn-trash-empty" style="background:rgba(255,50,50,0.12);border-color:rgba(255,50,50,0.2);color:#ff5252;">🗑️ Empty Trash</button>
+                <button onclick="loadTrash()">🔄 Refresh</button>
+                <span id="trash-count" style="font-size:12px;color:rgba(255,255,255,0.35);margin-left:8px;"></span>
+            </div>
+            
+            <div id="trash-grid" class="file-grid">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
         </div>
     </main>
 </div>
@@ -727,6 +763,7 @@ function switchPage(name) {
     if (navItem) navItem.classList.add('active');
     if (name === 'dashboard') loadDashboard();
     if (name === 'system') loadSystemInfo();
+    if (name === 'trash') loadTrash();
     closeSidebar();
 }
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
@@ -985,7 +1022,7 @@ function ctxAction(action) {
         const nn = prompt('New name:', name);
         if (nn && nn !== name) apiFetch('/nas/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
     } else if (action === 'delete') {
-        if (confirm('Delete "' + name + '" ?')) apiFetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
+        if (confirm('Move "' + name + '" to Trash?')) apiFetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
     }
     document.getElementById('ctx-menu').style.display = 'none';
 }
@@ -1632,6 +1669,119 @@ function escapeHtml(text) {
     const d = document.createElement('div');
     d.textContent = text || '';
     return d.innerHTML;
+}
+
+function formatSize(bytes) {
+    if (bytes == null) return '-';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) {
+        size /= 1024;
+        i++;
+    }
+    return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+// ====== TRASH ======
+
+async function loadTrash() {
+    const grid = document.getElementById('trash-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        const r = await apiFetch('/nas/api/trash/list');
+        const data = await r.json();
+        const items = data.items || [];
+        
+        const countEl = document.getElementById('trash-count');
+        if (countEl) countEl.textContent = items.length + ' item(s)';
+        
+        if (items.length === 0) {
+            grid.innerHTML = '<div class="trash-empty-msg"><div class="big-icon">🗑️</div>Trash is empty</div>';
+            return;
+        }
+        
+        let html = '';
+        for (const item of items) {
+            const icon = item.is_dir ? '📁' : '📄';
+            const sizeStr = item.size != null ? formatSize(item.size) : '-';
+            const deletedDate = item.deleted_at ? item.deleted_at.split('T')[0] : 'unknown';
+            html += '<div class="trash-entry">';
+            html += '  <div class="icon">' + icon + '</div>';
+            html += '  <div class="info">';
+            html += '    <div class="name">' + escapeHtml(item.trash_name.replace(/_[0-9]+$/, '')) + '</div>';
+            html += '    <div class="path">📍 ' + escapeHtml(item.original_path) + '</div>';
+            html += '    <div class="meta">🗑️ ' + deletedDate + (item.is_dir ? '' : ' &middot; ' + sizeStr) + '</div>';
+            html += '  </div>';
+            html += '  <div class="actions">';
+            html += '    <button class="btn-restore" onclick="trashRestore(\'' + escapeHtml(item.trash_name) + '\')">↩️ Restore</button>';
+            html += '    <button class="btn-permdelete" onclick="trashPermanentDelete(\'' + escapeHtml(item.trash_name) + '\')">🗑️ Delete</button>';
+            html += '  </div>';
+            html += '</div>';
+        }
+        grid.innerHTML = html;
+    } catch (e) {
+        grid.innerHTML = '<div class="trash-empty-msg"><div class="big-icon">⚠️</div>Failed to load trash: ' + escapeHtml(e.message) + '</div>';
+    }
+}
+
+async function trashRestore(trashName) {
+    if (!confirm('Restore this item to its original location?')) return;
+    try {
+        const r = await apiFetch('/nas/api/trash/restore', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({trash_name: trashName})
+        });
+        const data = await r.json();
+        if (data.success) {
+            loadTrash();
+        } else {
+            alert('Restore failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Restore error: ' + e.message);
+    }
+}
+
+async function trashPermanentDelete(trashName) {
+    if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+    try {
+        const r = await apiFetch('/nas/api/trash/permanent-delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({trash_name: trashName})
+        });
+        const data = await r.json();
+        if (data.success) {
+            loadTrash();
+        } else {
+            alert('Delete failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Delete error: ' + e.message);
+    }
+}
+
+async function trashEmpty() {
+    if (!confirm('Empty entire trash? This permanently deletes ALL items and cannot be undone.')) return;
+    if (!confirm('Are you sure? There is no recovery after this.')) return;
+    try {
+        const r = await apiFetch('/nas/api/trash/empty', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await r.json();
+        if (data.success) {
+            loadTrash();
+        } else {
+            alert('Empty trash failed: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        alert('Empty trash error: ' + e.message);
+    }
 }
 
 </script>
