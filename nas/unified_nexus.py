@@ -31,8 +31,14 @@ CORS(app)
 app.json.sort_keys = False
 
 # --- CONFIG ---
-ROOT_DIR = '/home/jerry/workspace'
-NAS_PASSWORD = 'JERRY_NEXUS_2026'
+import os
+_ROOT_FALLBACK = os.environ.get('NAS_ROOT_DIR', '')
+ROOT_DIR = _ROOT_FALLBACK if _ROOT_FALLBACK else '/home/jerry/workspace'
+NAS_PASSWORD = os.environ.get('NAS_PASSWORD')
+if not NAS_PASSWORD:
+    import logging as _log
+    _log.warning('⚠️ NAS_PASSWORD not set — using insecure fallback. Set env var NAS_PASSWORD!')
+    NAS_PASSWORD = 'JERRY_NEXUS_2026'
 
 def init_app(root, password, port):
     global ROOT_DIR, NAS_PASSWORD
@@ -940,6 +946,7 @@ def webdav_stop():
 
 
 @nas_bp.route('/api/shutdown', methods=['POST'])
+@require_auth
 def shutdown_server():
     logging.getLogger(__name__).info('Shutdown request received. Shutting down server...')
     
