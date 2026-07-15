@@ -1,12 +1,12 @@
 import requests
 import logging
 import json
-from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response
+from flask import Flask, jsonify, request, send_file, send_from_directory, Blueprint, redirect, Response, render_template_string
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.1.0'
-RELEASE_DATE = '2026-07-15'
+__version__ = '1.2.0'
+RELEASE_DATE = '2026-07-16'
 import psutil
 import platform
 import time
@@ -261,11 +261,19 @@ def list_files():
     try:
         files = []
         for entry in os.scandir(full_path):
-            files.append({
-                "name": entry.name, "is_dir": entry.is_dir(),
-                "size": entry.stat().st_size if not entry.is_dir() else None,
-                "mtime": entry.stat().st_mtime
-            })
+            try:
+                st = entry.stat()
+                files.append({
+                    "name": entry.name, "is_dir": entry.is_dir(),
+                    "size": st.st_size if not entry.is_dir() else None,
+                    "mtime": st.st_mtime
+                })
+            except (FileNotFoundError, OSError):
+                # Skip broken symlinks or inaccessible entries
+                files.append({
+                    "name": entry.name, "is_dir": False,
+                    "size": 0, "mtime": 0
+                })
         return jsonify(files)
     except Exception as e: return jsonify({"error": str(e)}), 500
 
@@ -504,6 +512,433 @@ def download_file():
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path), as_attachment=True)
 
+
+@nas_bp.route('/api/download-zip', methods=['POST'])
+@require_auth
+def download_zip():
+    """Download multiple files/folders as a ZIP archive."""
+    import zipfile
+    import tempfile
+    from io import BytesIO
+    
+    paths = request.json.get('paths', [])
+    if not paths:
+        return jsonify({"error": "No paths provided"}), 400
+    
+    # Resolve all paths and validate
+    resolved = []
+    for p in paths:
+        fp = resolve_path(p)
+        if not fp.startswith(ROOT_DIR):
+            return jsonify({"error": f"Forbidden: {p}"}), 403
+        if not os.path.exists(fp):
+            return jsonify({"error": f"Not found: {p}"}), 404
+        resolved.append((p, fp))
+    
+    # Create ZIP in memory
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for orig_path, full_path in resolved:
+            # Determine archive name: use the relative path from resolve
+            rel_name = orig_path.lstrip('/')
+            if os.path.isdir(full_path):
+                # Walk directory and add all files
+                for dirpath, dirnames, filenames in os.walk(full_path):
+                    # Compute archive subpath
+                    sub_rel = os.path.relpath(dirpath, os.path.dirname(full_path))
+                    for fn in filenames:
+                        file_full = os.path.join(dirpath, fn)
+                        arcname = os.path.join(os.path.basename(full_path), sub_rel, fn) if sub_rel != '.' else os.path.join(os.path.basename(full_path), fn)
+                        zf.write(file_full, arcname)
+            else:
+                # Single file
+                zf.write(full_path, os.path.basename(full_path))
+    
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip', as_attachment=True, download_name='nas_download.zip')
+
+# === SHARE LINK API ===
+
+SHARE_DIR = os.path.join(ROOT_DIR, '.shares')
+
+def get_share_meta():
+    if not os.path.exists(os.path.join(SHARE_DIR, 'shares.json')):
+        return {'shares': []}
+    try:
+        with open(os.path.join(SHARE_DIR, 'shares.json'), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {'shares': []}
+
+def save_share_meta(meta):
+    os.makedirs(SHARE_DIR, exist_ok=True)
+    with open(os.path.join(SHARE_DIR, 'shares.json'), 'w', encoding='utf-8') as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+def cleanup_expired_shares(shares):
+    """Remove expired shares and their physical files."""
+    now = time.time()
+    active = []
+    for s in shares:
+        if now <= s.get('expires_at', 0):
+            active.append(s)
+        else:
+            # Remove symlink/zip if exists
+            tok = s['token']
+            for fname in (tok, f'{tok}.zip'):
+                fpath = os.path.join(SHARE_DIR, fname)
+                try:
+                    if os.path.islink(fpath) or os.path.exists(fpath):
+                        os.unlink(fpath)
+                except Exception:
+                    pass
+    return active
+
+import secrets
+
+def generate_token():
+    return secrets.token_urlsafe(12)
+
+@nas_bp.route('/api/shares/create', methods=['POST'])
+@require_auth
+def shares_create():
+    """Create a temporary share link for a file/folder."""
+    data = request.json
+    paths = data.get('paths', [])
+    path = data.get('path', '')
+    expires_hours = int(data.get('expires_hours', 24))
+    password = data.get('password', '')
+    
+    # Cleanup expired shares first
+    meta = get_share_meta()
+    meta['shares'] = cleanup_expired_shares(meta['shares'])
+    save_share_meta(meta)
+    
+    # Handle batch: multiple paths → create a ZIP bundle
+    if len(paths) > 1:
+        from io import BytesIO
+        import zipfile
+        os.makedirs(SHARE_DIR, exist_ok=True)
+        token = generate_token()
+        expires_at = time.time() + (expires_hours * 3600)
+        
+        # Resolve and validate all paths
+        resolved = []
+        for p in paths:
+            fp = resolve_path(p)
+            if not fp.startswith(ROOT_DIR):
+                return jsonify({"error": f"Forbidden: {p}"}), 403
+            if not os.path.exists(fp):
+                return jsonify({"error": f"Not found: {p}"}), 404
+            resolved.append((p, fp))
+        
+        # Create ZIP in shares dir
+        zip_name = f'{token}.zip'
+        zip_path = os.path.join(SHARE_DIR, zip_name)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for orig_path, full_path in resolved:
+                if os.path.isdir(full_path):
+                    for dirpath, dirnames, filenames in os.walk(full_path):
+                        for fn in filenames:
+                            file_full = os.path.join(dirpath, fn)
+                            arcname = os.path.relpath(file_full, os.path.dirname(full_path))
+                            zf.write(file_full, arcname)
+                else:
+                    zf.write(full_path, os.path.basename(full_path))
+        
+        meta = get_share_meta()
+        meta['shares'].append({
+            'token': token,
+            'original_path': f'batch_{zip_name}',
+            'is_dir': False,
+            'is_batch': True,
+            'created_at': time.strftime('%Y-%m-%dT%H:%M:%S'),
+            'expires_at': expires_at,
+            'has_password': bool(password),
+            'password': password
+        })
+        save_share_meta(meta)
+        return jsonify({
+            'success': True,
+            'token': token,
+            'expires_at': expires_at,
+            'url': f'/nas/share/{token}'
+        })
+    
+    # Single file share (also used when paths has 1 item)
+    if len(paths) == 1:
+        path = paths[0]
+    # fall through to single path
+    full_path = resolve_path(path)
+    if not full_path.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+    if not os.path.exists(full_path):
+        return jsonify({"error": "File not found"}), 404
+    
+    # Generate token
+    token = generate_token()
+    expires_at = time.time() + (expires_hours * 3600)
+    
+    # Create symlink in shares dir
+    os.makedirs(SHARE_DIR, exist_ok=True)
+    link_path = os.path.join(SHARE_DIR, token)
+    
+    # Use symlink if possible, else copy
+    rel_path = os.path.relpath(full_path, ROOT_DIR)
+    try:
+        os.symlink(full_path, link_path)
+        link_type = 'symlink'
+    except Exception:
+        link_type = 'copy'
+    
+    # Save metadata
+    meta = get_share_meta()
+    meta['shares'].append({
+        'token': token,
+        'original_path': rel_path,
+        'is_dir': os.path.isdir(full_path),
+        'created_at': time.strftime('%Y-%m-%dT%H:%M:%S'),
+        'expires_at': expires_at,
+        'has_password': bool(password),
+        'password': password
+    })
+    save_share_meta(meta)
+    
+    return jsonify({
+        'success': True,
+        'token': token,
+        'expires_at': expires_at,
+        'url': f'/nas/share/{token}'
+    })
+
+
+@nas_bp.route('/share/<token>')
+def share_access(token):
+    """Access a shared file/folder (no auth required)."""
+    meta = get_share_meta()
+    share = None
+    for s in meta.get('shares', []):
+        if s['token'] == token:
+            share = s
+            break
+    
+    if not share:
+        return jsonify({"error": "Share link not found"}), 404
+    
+    # Check expiration
+    if time.time() > share.get('expires_at', 0):
+        return jsonify({"error": "Share link has expired"}), 410
+    
+    # Check password if set
+    pw = request.args.get('password', '')
+    error_msg = None
+    if share.get('password'):
+        if not pw:
+            error_msg = 'This share is password-protected'
+        elif pw != share['password']:
+            error_msg = 'Incorrect password'
+        
+        if error_msg:
+            err_display = '❌ Invalid password' if 'Incorrect' in error_msg else '🔐 Password required'
+            share_html = f'''<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.NAS - Share Access</title>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a0a14; color: #e0e0ff; display:flex; align-items:center; justify-content:center; min-height:100vh; }}
+.card {{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius:16px; padding:2rem; width:90%; max-width:380px; text-align:center; }}
+.icon {{ font-size:48px; margin-bottom:12px; }}
+h1 {{ font-size:18px; font-weight:600; margin-bottom:4px; }}
+.sub {{ font-size:13px; color: rgba(255,255,255,0.35); margin-bottom:20px; word-break: break-all; }}
+input {{ width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:10px 14px; border-radius:10px; font-size:14px; outline:none; margin-bottom:12px; box-sizing:border-box; }}
+input:focus {{ border-color:#00f2ff; }}
+button {{ width:100%; background:rgba(0,242,255,0.1); border:1px solid rgba(0,242,255,0.15); color:#00f2ff; padding:10px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; transition:background 0.2s; }}
+button:hover {{ background:rgba(0,242,255,0.2); }}
+.err {{ background:rgba(255,50,50,0.08); border:1px solid rgba(255,50,50,0.15); color:#ff5252; padding:8px 12px; border-radius:8px; font-size:12px; margin-bottom:12px; }}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon">{'📦' if share.get('is_batch') else '📁' if share.get('is_dir') else '📄'}</div>
+'''
+            if error_msg == 'Incorrect password':
+                share_html += '<div class="err">❌ Incorrect password</div>'
+            else:
+                share_html += '<div class="err">🔐 This share is password-protected</div>'
+            share_html += f'''<h1>Shared {share['original_path']}</h1>
+<form method="get" action="">
+<input type="password" name="password" placeholder="Enter share password" autofocus>
+<button type="submit">🔓 Unlock & Download</button>
+</form>
+</div>
+</body>
+</html>'''
+            return share_html, 401
+    
+    # Resolve the file
+    if share.get('is_batch'):
+        # Batch share: serve the pre-built ZIP from shares dir
+        zip_path = os.path.join(SHARE_DIR, f"{share['token']}.zip")
+        if not os.path.exists(zip_path):
+            return jsonify({"error": "Batch share file no longer exists"}), 404
+        return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name='share_bundle.zip')
+    
+    original_full = os.path.join(ROOT_DIR, share['original_path'])
+    if not os.path.exists(original_full):
+        return jsonify({"error": "Original file no longer exists"}), 404
+    
+    if share.get('is_dir'):
+        # Serve directory as ZIP
+        from io import BytesIO
+        import zipfile
+        buf = BytesIO()
+        dirname = os.path.basename(original_full)
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, dirnames, filenames in os.walk(original_full):
+                for fn in filenames:
+                    file_full = os.path.join(dirpath, fn)
+                    arcname = os.path.relpath(file_full, os.path.dirname(original_full))
+                    zf.write(file_full, arcname)
+        buf.seek(0)
+        return send_file(buf, mimetype='application/zip', as_attachment=True, download_name=f'{dirname}.zip')
+    
+    return send_file(original_full, as_attachment=True, download_name=os.path.basename(original_full))
+
+
+@nas_bp.route('/api/shares/list', methods=['GET'])
+@require_auth
+def shares_list():
+    """List active share links."""
+    meta = get_share_meta()
+    # Clean up expired before listing
+    meta['shares'] = cleanup_expired_shares(meta['shares'])
+    save_share_meta(meta)
+    now = time.time()
+    # Filter out expired
+    active = []
+    for s in meta.get('shares', []):
+        if now <= s.get('expires_at', 0):
+            active.append({
+                'token': s['token'],
+                'original_path': s['original_path'],
+                'is_dir': s.get('is_dir', False),
+                'created_at': s.get('created_at', ''),
+                'expires_at': s['expires_at'],
+                'has_password': s.get('has_password', False),
+                'url': f'/nas/share/{s["token"]}'
+            })
+    return jsonify({'shares': active})
+
+
+@nas_bp.route('/api/shares/delete', methods=['POST'])
+@require_auth
+def shares_delete():
+    """Delete a share link."""
+    token = request.json.get('token', '')
+    meta = get_share_meta()
+    meta['shares'] = [s for s in meta.get('shares', []) if s['token'] != token]
+    save_share_meta(meta)
+    
+    # Remove symlink if exists
+    link_path = os.path.join(SHARE_DIR, token)
+    if os.path.exists(link_path):
+        try:
+            if os.path.islink(link_path):
+                os.unlink(link_path)
+            elif os.path.isfile(link_path):
+                os.remove(link_path)
+        except Exception:
+            pass
+    
+    return jsonify({'success': True})
+
+
+# === WEBDAV ===
+
+WEBDAV_PORT = 8001
+webdav_process = None
+
+def start_webdav():
+    """Start wsgidav server as a subprocess."""
+    global webdav_process
+    if webdav_process and webdav_process.poll() is None:
+        return True  # Already running
+    
+    import subprocess
+    venv_python = sys.executable
+    webdav_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webdav_server.py')
+    
+    # Ensure the webdav server script exists and is executable
+    if not os.path.exists(webdav_script):
+        logger.error(f"WebDAV script not found at {webdav_script}")
+        return False
+    os.chmod(webdav_script, 0o755)
+    
+    try:
+        webdav_process = subprocess.Popen(
+            [venv_python, webdav_script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start WebDAV: {e}")
+        return False
+
+def stop_webdav():
+    """Stop the WebDAV subprocess."""
+    global webdav_process
+    if webdav_process and webdav_process.poll() is None:
+        webdav_process.terminate()
+        try:
+            webdav_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            webdav_process.kill()
+        webdav_process = None
+        return True
+    return False
+
+
+def is_webdav_running():
+    """Check if WebDAV subprocess is running."""
+    global webdav_process
+    return webdav_process is not None and webdav_process.poll() is None
+
+
+@nas_bp.route('/api/webdav/status', methods=['GET'])
+@require_auth
+def webdav_status():
+    """Get WebDAV server status."""
+    return jsonify({
+        'running': is_webdav_running(),
+        'port': WEBDAV_PORT,
+        'url': f'http://100.99.4.98:{WEBDAV_PORT}/',
+        'dav_url': f'http://100.99.4.98:{WEBDAV_PORT}/',
+        'username': 'jerry'
+    })
+
+
+@nas_bp.route('/api/webdav/start', methods=['POST'])
+@require_auth
+def webdav_start():
+    """Start WebDAV server."""
+    if is_webdav_running():
+        return jsonify({'success': True, 'message': 'Already running'})
+    ok = start_webdav()
+    return jsonify({'success': ok, 'running': ok})
+
+
+@nas_bp.route('/api/webdav/stop', methods=['POST'])
+@require_auth
+def webdav_stop():
+    """Stop WebDAV server."""
+    stop_webdav()
+    return jsonify({'success': True, 'running': False})
+
+
 @nas_bp.route('/api/shutdown', methods=['POST'])
 def shutdown_server():
     logging.getLogger(__name__).info('Shutdown request received. Shutting down server...')
@@ -725,7 +1160,7 @@ def get_thumbnail():
             from PIL import Image, ImageOps
             img = Image.open(full_path)
             img = ImageOps.exif_transpose(img)
-            img.thumbnail((200, 200), Image.LANCZOS)
+            img.thumbnail((800, 800), Image.LANCZOS)
             if img.mode in ('RGBA', 'LA', 'P'):
                 bg = Image.new('RGB', img.size, (30, 30, 40))
                 if img.mode == 'RGBA':
@@ -735,7 +1170,7 @@ def get_thumbnail():
                 img = bg
             
             img_io = io.BytesIO()
-            img.save(img_io, 'JPEG', quality=85)
+            img.save(img_io, 'JPEG', quality=90)
             img_io.seek(0)
             return send_file(img_io, mimetype='image/jpeg')
 
@@ -748,7 +1183,7 @@ def get_thumbnail():
                     cmd = [
                         ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
                         '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
-                        '-vcodec', 'mjpeg', '-vf', 'scale=200:-1', '-'
+                        '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
                     ]
                     result = subprocess.run(cmd, capture_output=True, timeout=10)
                     if result.returncode == 0 and result.stdout:

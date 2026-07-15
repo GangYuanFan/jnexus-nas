@@ -114,6 +114,29 @@
         .file-grid.grid .file-entry .actions { position: absolute; top: 6px; right: 6px; }
         .file-grid.grid .file-entry { position: relative; }
 
+        /* Gallery mode */
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+        .gallery-grid .gallery-item { position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; aspect-ratio: 1; background: rgba(255,255,255,0.02); transition: transform 0.15s; }
+        .gallery-grid .gallery-item:hover { transform: scale(1.02); }
+        .gallery-grid .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+        .gallery-grid .gallery-item .gallery-caption { position: absolute; bottom: 0; left: 0; right: 0; padding: 8px; background: linear-gradient(transparent, rgba(0,0,0,0.7)); font-size: 11px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity 0.2s; }
+        .gallery-grid .gallery-item:hover .gallery-caption { opacity: 1; }
+        .gallery-grid .gallery-play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 48px; height: 48px; background: rgba(0,0,0,0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; border: 2px solid rgba(255,255,255,0.3); pointer-events: none; }
+        .gallery-grid .gallery-item:hover .gallery-play-icon { background: rgba(0,0,0,0.75); border-color: rgba(255,255,255,0.6); }
+
+        /* Share dialog */
+        #share-overlay { display: none; position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); justify-content: center; align-items: center; }
+        #share-dialog { background: rgba(18,18,30,0.95); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 440px; box-shadow: 0 16px 64px rgba(0,0,0,0.5); }
+        #share-dialog h3 { margin: 0 0 1rem; font-size: 16px; font-weight: 600; }
+        #share-dialog label { display: block; font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+        #share-dialog input, #share-dialog select { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none; box-sizing: border-box; margin-bottom: 12px; }
+        #share-dialog input:focus { border-color: #00f2ff; }
+        #share-dialog .share-url-box { display: flex; gap: 8px; align-items: center; background: rgba(0,242,255,0.05); border: 1px solid rgba(0,242,255,0.1); border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+        #share-dialog .share-url-box input { margin: 0; flex: 1; background: transparent; border: none; color: #00f2ff; font-size: 12px; }
+        #share-dialog .share-url-box button { background: rgba(0,242,255,0.1); border: 1px solid rgba(0,242,255,0.15); color: #00f2ff; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        #share-dialog .share-url-box button:hover { background: rgba(0,242,255,0.2); }
+        #share-dialog .btn-close-share { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #ccc; padding: 6px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; margin-top: 12px; }
+
         /* Trash page styles */
         .trash-entry { display: flex; align-items: center; padding: 10px 16px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04); gap: 12px; transition: background 0.15s; }
         .trash-entry:hover { background: rgba(255,255,255,0.05); }
@@ -391,6 +414,9 @@
                 <button onclick="createFolder()">📁 New Folder</button>
                 <label>☁️ Upload<input type="file" multiple hidden onchange="handleUpload(this)"></label>
                 <button onclick="toggleGrid()">🔲 Toggle View</button>
+                <button id="btn-gallery" onclick="toggleGallery()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🖼️ Gallery</button>
+                <button id="btn-batch-dl" onclick="batchDownload()" style="display:none;background:rgba(0,242,255,0.08);border-color:rgba(0,242,255,0.15);color:#00f2ff;">📦 Download (<span id="batch-count">0</span>)</button>
+                <button id="btn-batch-share" onclick="shareSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🔗 Share (<span id="share-count">0</span>)</button>
 
             <!-- Upload Progress Bar (hidden by default) -->
             <div id="upload-progress-container" class="hidden-upload" style="display:none">
@@ -456,6 +482,36 @@
 </div>
 
 <!-- Media Player Overlay -->
+<!-- Share Link Dialog -->
+<div id="share-overlay" onclick="if(event.target===this)document.getElementById('share-overlay').style.display='none'">
+    <div id="share-dialog" onclick="event.stopPropagation()">
+        <h3>🔗 Share Link</h3>
+        <label>File</label>
+        <input id="share-file-name" readonly style="opacity:0.6">
+        <label>Expires after</label>
+        <select id="share-expires">
+            <option value="1">1 hour</option>
+            <option value="6">6 hours</option>
+            <option value="24" selected>24 hours</option>
+            <option value="72">3 days</option>
+            <option value="168">7 days</option>
+        </select>
+        <label>Protect link with password (optional)</label>
+        <input id="share-password" type="text" placeholder="Set a password for recipients (not your NAS password)">
+        <button onclick="createShare()" style="width:100%;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.15);color:#00f2ff;padding:8px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;">🔗 Generate Share Link</button>
+        <div id="share-result" style="display:none">
+            <div class="share-url-box">
+                <input id="share-url" readonly onclick="this.select()">
+                <button onclick="copyShareUrl()">📋 Copy</button>
+            </div>
+            <div id="share-url-note" style="display:none;font-size:12px;color:rgba(255,200,50,0.7);margin-top:8px;padding:6px 10px;background:rgba(255,200,50,0.06);border-radius:8px;"></div>
+        </div>
+        <div style="text-align:center">
+            <button class="btn-close-share" onclick="document.getElementById('share-overlay').style.display='none'">Close</button>
+        </div>
+    </div>
+</div>
+
 <div id="media-overlay">
     <button id="close-media" onclick="closeMediaPlayer()">✕</button>
     <div class="media-container" id="media-container">
@@ -570,12 +626,13 @@
     <div class="ctx-item" onclick="ctxAction('edit')">📝 Edit</div>
     <div class="ctx-item" onclick="ctxAction('download')">⬇️ Download</div>
     <div class="ctx-item" onclick="ctxAction('rename')">✏️ Rename</div>
+    <div class="ctx-item" onclick="ctxAction('share')">🔗 Share Link</div>
     <div class="ctx-divider"></div>
     <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
 </div>
 
 
-<script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, currentEditingPath = '', activeMedia = null;
+<script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, isGallery = false, currentEditingPath = '', activeMedia = null;
 let cpuChart, memChart; // Chart instances
 
 let ROOT = '';
@@ -679,13 +736,7 @@ function checkAuth() {
 function apiFetch(url, options = {}) {
     const urlObj = new URL(url, window.location.origin);
     urlObj.searchParams.append('password', userPassword);
-    if (options.method === 'POST' && options.body) {
-        try {
-            const body = JSON.parse(options.body);
-            body.password = userPassword;
-            options.body = JSON.stringify(body);
-        } catch (e) {}
-    }
+    // Auth password already in URL via searchParams; no need to inject into body
     return fetch(urlObj.toString(), options);
 }
 
@@ -842,13 +893,58 @@ async function loadSystemInfo() {
         const r = await apiFetch('/nas/api/sysinfo');
         const d = await r.json();
         const mainDisk = (d.disks && d.disks.length > 0) ? d.disks[0] : {total_gb: 0, used_gb: 0};
-        el.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+        let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
             '<div class="card"><div class="label">CPU</div><div class="value">' + d.cpu_count + ' cores</div><div class="sub">' + d.cpu_percent.toFixed(1) + '% utilized</div></div>' +
             '<div class="card"><div class="label">Platform</div><div class="value" style="font-size:1.2rem">' + d.platform + '</div><div class="sub">' + d.hostname + '</div></div>' +
             '<div class="card"><div class="label">Memory</div><div class="value">' + (d.memory.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (d.memory.used_gb).toFixed(1) + ' GB used</div></div>' +
             '<div class="card"><div class="label">Disk</div><div class="value">' + (mainDisk.total_gb).toFixed(1) + ' GB</div><div class="sub">' + (mainDisk.used_gb).toFixed(1) + ' GB used</div></div>' +
             '</div>';
+        
+        // WebDAV section
+        html += '<div class="label" style="font-size:12px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin:1.5rem 0 10px;letter-spacing:1px;">🔗 WebDAV</div>';
+        html += '<div id="webdav-card" class="card">Loading...</div>';
+        
+        el.innerHTML = html;
+        
+        // Load WebDAV status
+        try {
+            const wdr = await apiFetch('/nas/api/webdav/status');
+            const wd = await wdr.json();
+            const wc = document.getElementById('webdav-card');
+            if (wd.running) {
+                wc.innerHTML = '<div class="label">Status</div><div class="value" style="color:#4ade80">🟢 Running</div>' +
+                    '<div class="sub" style="margin-top:8px">URL: <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;font-size:13px">' + escapeHtml(wd.dav_url) + '</code></div>' +
+                    '<div class="sub">Username: <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px">' + escapeHtml(wd.username) + '</code></div>' +
+                    '<div class="sub">Password: Your NAS password</div>' +
+                    '<button onclick="stopWebDAV()" style="margin-top:10px;background:rgba(255,50,50,0.1);border:1px solid rgba(255,50,50,0.15);color:#ff5252;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">🛑 Stop WebDAV</button>';
+            } else {
+                wc.innerHTML = '<div class="label">Status</div><div class="value" style="color:rgba(255,255,255,0.3)">⚫ Stopped</div>' +
+                    '<button onclick="startWebDAV()" style="margin-top:10px;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.15);color:#00f2ff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">▶️ Start WebDAV</button>';
+            }
+        } catch(e) {
+            const wc = document.getElementById('webdav-card');
+            if (wc) wc.innerHTML = 'WebDAV: ' + e.message;
+        }
+        
     } catch(e) { el.innerHTML = '<div class="card">Failed to load system info.</div>'; }
+}
+
+async function startWebDAV() {
+    try {
+        const r = await apiFetch('/nas/api/webdav/start', {method:'POST', headers:{'Content-Type':'application/json'}});
+        const d = await r.json();
+        if (d.success) loadSystemInfo();
+        else alert('Failed to start WebDAV');
+    } catch(e) { alert(e.message); }
+}
+
+async function stopWebDAV() {
+    try {
+        const r = await apiFetch('/nas/api/webdav/stop', {method:'POST', headers:{'Content-Type':'application/json'}});
+        const d = await r.json();
+        if (d.success) loadSystemInfo();
+        else alert('Failed to stop WebDAV');
+    } catch(e) { alert(e.message); }
 }
 
 async function loadFiles(path, pushHist = true) {
@@ -893,6 +989,14 @@ async function loadFiles(path, pushHist = true) {
     try {
         const r = await apiFetch('/nas/api/files?path=' + encodeURIComponent(path));
         allFiles = await r.json();
+        // Show/hide gallery button based on image/video content
+        const galBtn = document.getElementById('btn-gallery');
+        if (galBtn && !isGallery) {
+            const mediaExts = ['jpg','jpeg','png','gif','webp','mp4','mov','avi','mkv','webm'];
+            const hasMedia = allFiles.some(f => mediaExts.includes(f.name.split('.').pop().toLowerCase()) && !f.is_dir);
+            galBtn.style.display = hasMedia ? '' : 'none';
+        }
+        if (isGallery) galBtn.textContent = '📋 List';
         renderFiles(allFiles);
     } catch(e) { grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">Error loading files</div>'; }
 }
@@ -935,6 +1039,41 @@ function renderFiles(files) {
         return;
     }
     if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
+    
+    // Gallery mode: show only images in a photo grid
+    if (isGallery) {
+        const imgExts = ['jpg','jpeg','png','gif','webp'];
+        const vidExts = ['mp4','mov','avi','mkv','webm'];
+        const mediaExts = [...imgExts, ...vidExts];
+        const media = files.filter(f => {
+            const ext = f.name.split('.').pop().toLowerCase();
+            return mediaExts.includes(ext) && !f.is_dir;
+        });
+        if (media.length === 0) {
+            isGallery = false;
+            document.getElementById('btn-gallery').textContent = '🖼️ Gallery';
+        } else {
+            grid.className = 'gallery-grid';
+            grid.innerHTML = '';
+            for (const f of media) {
+                const fpath = currentPath ? currentPath + '/' + f.name : f.name;
+                const encPath = encodeURIComponent(fpath);
+                const ext = f.name.split('.').pop().toLowerCase();
+                const isVid = vidExts.includes(ext);
+                const thumbUrl = '/nas/api/thumbnail?path=' + encPath + '&t=' + Date.now();
+                const item = document.createElement('div');
+                item.className = 'gallery-item';
+                item.innerHTML = `<img src="${thumbUrl}" alt="${f.name}" loading="lazy">${isVid ? '<div class="gallery-play-icon">▶</div>' : ''}<div class="gallery-caption">${f.name}</div>`;
+                item.onclick = () => {
+                    const fullPath = currentPath ? currentPath + '/' + f.name : f.name;
+                    openMediaPlayer(fullPath, isVid ? 'video' : 'image');
+                };
+                grid.appendChild(item);
+            }
+            return;
+        }
+    }
+    
     grid.className = 'file-grid' + (isGrid ? ' grid' : '');
     grid.innerHTML = '';
     const sorted = [...files].sort((a, b) => {
@@ -951,6 +1090,7 @@ function renderFiles(files) {
         const size = f.is_dir ? '' : (f.size / 1024).toFixed(1) + ' KB';
         
         entry.innerHTML = `
+            <input type="checkbox" class="file-check" data-path="${fpath}" onclick="event.stopPropagation();toggleBatch()" style="margin-right:4px;accent-color:#00f2ff;width:14px;height:14px;cursor:pointer;flex-shrink:0;">
             <img src="${iconUrl}" class="icon" alt="icon">
             <span class="name">${f.name}</span>
             <span class="size">${size}</span>
@@ -1023,6 +1163,8 @@ function ctxAction(action) {
         if (nn && nn !== name) apiFetch('/nas/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
     } else if (action === 'delete') {
         if (confirm('Move "' + name + '" to Trash?')) apiFetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
+    } else if (action === 'share') {
+        showShareDialog(name, path);
     }
     document.getElementById('ctx-menu').style.display = 'none';
 }
@@ -1036,12 +1178,44 @@ function goBack() { if(histIdx>0) { histIdx--; loadFiles(histStack[histIdx],fals
 function goForward() { if(histIdx<histStack.length-1) { histIdx++; loadFiles(histStack[histIdx],false); } }
 function goUp() { if(!currentPath) return; const p=currentPath.split('/'); p.pop(); loadFiles(p.join('/')); }
 function refresh() { loadFiles(currentPath); }
-function download(ep) { window.location.href = '/nas/api/download?path=' + ep + '&password=' + userPassword; }
+async function download(ep) {
+    try {
+        const resp = await apiFetch('/nas/api/download?path=' + ep);
+        if (!resp.ok) { const err = await resp.json(); alert('Download failed: ' + (err.error || resp.statusText)); return; }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const disp = resp.headers.get('content-disposition') || '';
+        const match = disp.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        a.download = match ? match[1].replace(/['"]/g, '') : decodeURIComponent(ep.split('/').pop() || 'download');
+        a.href = url;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch(e) { alert('Download failed: ' + e.message); }
+}
 function updateNav() {
     document.getElementById('btn-back').disabled = histIdx <= 0;
     document.getElementById('btn-forward').disabled = histIdx >= histStack.length - 1;
 }
-function toggleGrid() { isGrid = !isGrid; renderFiles(allFiles); }
+function toggleGrid() { isGrid = !isGrid; isGallery = false; document.getElementById('btn-gallery').textContent = '🖼️ Gallery'; renderFiles(allFiles); }
+
+function toggleGallery() {
+    isGallery = !isGallery;
+    isGrid = false;
+    const btn = document.getElementById('btn-gallery');
+    btn.textContent = isGallery ? '📋 List' : '🖼️ Gallery';
+    renderFiles(allFiles);
+}
+
+function hasImages(files) {
+    const imgExts = ['jpg','jpeg','png','gif','webp'];
+    return files.some(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        return imgExts.includes(ext);
+    });
+}
 
 async function createFolder() {
     const n = prompt('Folder name:');
@@ -1671,6 +1845,91 @@ function escapeHtml(text) {
     return d.innerHTML;
 }
 
+// ====== SHARE LINK ======
+
+let shareFilePath = '';
+
+function showShareDialog(name, path) {
+    shareFilePath = path;
+    shareBatchPaths = null;
+    document.getElementById('share-file-name').value = name;
+    document.getElementById('share-result').style.display = 'none';
+    document.getElementById('share-url').value = '';
+    document.getElementById('share-password').value = '';
+    document.getElementById('share-url-note').style.display = 'none';
+    document.getElementById('share-overlay').style.display = 'flex';
+}
+
+function shareSelected() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    if (checks.length === 0) return;
+    const paths = Array.from(checks).map(c => c.getAttribute('data-path'));
+    
+    if (checks.length === 1) {
+        // Single file: show normal share dialog
+        showShareDialog(paths[0].split('/').pop(), paths[0]);
+    } else {
+        // Multiple files: show share dialog with batch flag
+        shareBatchPaths = paths;
+        document.getElementById('share-file-name').value = paths.length + ' files';
+        document.getElementById('share-result').style.display = 'none';
+        document.getElementById('share-url').value = '';
+        document.getElementById('share-password').value = '';
+        document.getElementById('share-url-note').style.display = 'none';
+        document.getElementById('share-overlay').style.display = 'flex';
+    }
+}
+
+let shareBatchPaths = null;
+
+async function createShare() {
+    const expires_hours = parseInt(document.getElementById('share-expires').value);
+    const password = document.getElementById('share-password').value;
+    
+    try {
+        let body;
+        if (shareBatchPaths) {
+            body = {paths: shareBatchPaths, expires_hours, password};
+        } else {
+            body = {path: shareFilePath, expires_hours, password};
+        }
+        const r = await apiFetch('/nas/api/shares/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (data.success) {
+            const baseURL = window.location.origin;
+            const baseUrl = baseURL + data.url;
+            if (password) {
+                // Show URL with password inline for direct use, and a note
+                const fullUrl = baseUrl + '?password=' + encodeURIComponent(password);
+                document.getElementById('share-url').value = baseUrl;
+                document.getElementById('share-result').style.display = 'block';
+                document.getElementById('share-url-note').textContent = '🔐 Password: "' + password + '" — share this too!';
+                document.getElementById('share-url-note').style.display = 'block';
+            } else {
+                document.getElementById('share-url').value = baseUrl;
+                document.getElementById('share-result').style.display = 'block';
+                document.getElementById('share-url-note').textContent = '';
+                document.getElementById('share-url-note').style.display = 'none';
+            }
+        } else {
+            alert('Failed: ' + (data.error || 'unknown'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function copyShareUrl() {
+    const input = document.getElementById('share-url');
+    input.select();
+    document.execCommand('copy');
+    alert('📋 Copied to clipboard!');
+}
+
 function formatSize(bytes) {
     if (bytes == null) return '-';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -1681,6 +1940,68 @@ function formatSize(bytes) {
         i++;
     }
     return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+// ====== BATCH DOWNLOAD ======
+
+function toggleBatch() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    const btn = document.getElementById('btn-batch-dl');
+    const cnt = document.getElementById('batch-count');
+    const shareBtn = document.getElementById('btn-batch-share');
+    const shareCnt = document.getElementById('share-count');
+    if (checks.length > 0) {
+        btn.style.display = '';
+        btn.innerHTML = (checks.length === 1 ? '⬇️ Download (<span id="batch-count">1</span>)' : '📦 Download (<span id="batch-count">' + checks.length + '</span>)');
+        shareBtn.style.display = '';
+        shareBtn.innerHTML = (checks.length === 1 ? '🔗 Share (<span id="share-count">1</span>)' : '🔗 Share (<span id="share-count">' + checks.length + '</span>)');
+    } else {
+        btn.style.display = 'none';
+        shareBtn.style.display = 'none';
+    }
+}
+
+async function batchDownload() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    if (checks.length === 0) return;
+    const paths = Array.from(checks).map(c => c.getAttribute('data-path'));
+    
+    // Single file: direct download, no ZIP
+    if (checks.length === 1) {
+        await download(encodeURIComponent(paths[0]));
+        checks.forEach(c => c.checked = false);
+        toggleBatch();
+        return;
+    }
+    
+    try {
+        const resp = await apiFetch('/nas/api/download-zip', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({paths})
+        });
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert('Download failed: ' + (err.error || resp.statusText));
+            return;
+        }
+        // Download the blob
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'nas_download.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Uncheck all
+        checks.forEach(c => c.checked = false);
+        toggleBatch();
+    } catch (e) {
+        alert('Download error: ' + e.message);
+    }
 }
 
 // ====== TRASH ======

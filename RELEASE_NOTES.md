@@ -1,5 +1,25 @@
 # J.NAS Release Notes
 
+## v1.2.0 (2026-07-16) — Batch Share, Password Fix, Auto Cleanup
+
+### 🔗 New: Batch Share
+- Multi-select files + 🔗 Share button → automatic ZIP bundling
+- Single file = direct share; 2+ files = shared ZIP
+
+### 🐛 Password Fix
+- Share password no longer overwritten by NAS master password (apiFetch body injection removed)
+- 3 contaminated shares cleaned up
+
+### 🧹 Auto Cleanup for Expired Shares
+- Expired symlinks, ZIP files, and metadata automatically removed on list/create
+- `.shares/` folder now browsable despite broken symlinks
+
+### 🖼️ Gallery & UX
+- 600px thumbnails with video play button overlay
+- Share dialog labels clarified: "Protect link with password (not your NAS password)"
+- Password form page for protected share links (no more raw JSON error)
+- WebDAV subprocess management (Start/Stop) in System page
+
 ## v1.1.0 (2026-07-15) — Trash Can + Feature Release
 
 ### 🗑️ New: Resource Recycle Bin (Trash)

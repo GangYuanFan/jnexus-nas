@@ -4,6 +4,16 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
+# 1.2.0 (2026-07-16) - Batch Share, Share Password Fix, Auto Cleanup
+# - New: Batch share — multi-select files → share as ZIP bundle
+# - Fix: Share password no longer overwritten by NAS master password
+# - New: Automated expired share cleanup (symlinks + ZIP + metadata)
+# - Fix: .shares/ folder now browsable despite broken symlinks
+# - UX: Share dialog labels clarified to prevent password confusion
+# - WebDAV: subprocess management in System page (Start/Stop)
+# - Gallery: improved 600px thumbnails with play button for videos
+# - Share UI: password form page for protected share links
+#
 # 1.1.0 (2026-07-15) - Resource Recycle Bin + Feature Release
 # - New: Trash can system — deleted files/folders go to .trash directory
 # - New: Trash UI in sidebar — list, restore, permanent delete, empty all
