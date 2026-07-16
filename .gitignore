@@ -16,3 +16,6 @@ dist/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Bundled ffmpeg binary (auto-downloaded by build_windows.bat)
+nas/bin/

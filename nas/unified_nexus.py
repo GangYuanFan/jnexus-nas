@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Bluep
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.2.1'
+__version__ = '1.2.2'
 RELEASE_DATE = '2026-07-16'
 import psutil
 import platform
@@ -1153,6 +1153,40 @@ def save_document():
 
 
 @nas_bp.route('/api/thumbnail')
+def _resolve_ffmpeg():
+    """Resolve ffmpeg binary: bundled EXE → system PATH → raw command.
+    On Windows, returns startupinfo to suppress the console window flash."""
+    startupinfo = None
+    creationflags = 0
+
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        bundle_dir = sys._MEIPASS
+        ffmpeg_path = os.path.join(bundle_dir, 'nas', 'bin', 'ffmpeg.exe')
+        if os.path.exists(ffmpeg_path):
+            if sys.platform == 'win32':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                creationflags = 0x08000000  # CREATE_NO_WINDOW
+            return ffmpeg_path, startupinfo, creationflags
+
+    # Fallback: system PATH or raw command
+    ffmpeg_bin = (
+        '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
+        if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg')
+        else shutil.which('ffmpeg') or 'ffmpeg'
+    )
+
+    if sys.platform == 'win32':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        creationflags = 0x08000000  # CREATE_NO_WINDOW
+
+    return ffmpeg_bin, startupinfo, creationflags
+
+
 def get_thumbnail():
     path = request.args.get('path', '')
     full_path = resolve_path(path)
@@ -1183,13 +1217,8 @@ def get_thumbnail():
 
         # 2. Video Thumbnails (Pure Memory via Pipe)
         if ext in VID_EXTS:
-            import subprocess, shutil
-            # Cross-platform ffmpeg lookup: Linux brew path → PATH → raw cmd
-            ffmpeg_bin = (
-                '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
-                if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg')
-                else shutil.which('ffmpeg') or 'ffmpeg'
-            )
+            import shutil
+            ffmpeg_bin, si, cf = _resolve_ffmpeg()
             try:
                 for timestamp in ['00:00:01', '00:00:00']:
                     cmd = [
@@ -1197,7 +1226,8 @@ def get_thumbnail():
                         '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
                         '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
                     ]
-                    result = subprocess.run(cmd, capture_output=True, timeout=10)
+                    result = subprocess.run(cmd, capture_output=True, timeout=10,
+                                            startupinfo=si, creationflags=cf)
                     if result.returncode == 0 and result.stdout:
                         return Response(result.stdout, mimetype='image/jpeg')
             except Exception as ve:

@@ -1,5 +1,21 @@
 # J.NAS Release Notes
 
+## v1.2.2 (2026-07-16) — Bundled ffmpeg + No Black Window
+
+### 🎬 ffmpeg Bundled into Build
+- `build_windows.bat` now auto-downloads `ffmpeg.exe` from gyan.dev into `nas/bin/`
+- Video thumbnails work out of the box — no separate ffmpeg install needed
+- Binary stays in `nas/bin/`; git-ignored (too large), redownloaded on each clean build
+
+### 🪟 No More Black Window Flash
+- Added `_resolve_ffmpeg()` helper that resolves from `sys._MEIPASS` (bundle) first
+- On Windows, passes `CREATE_NO_WINDOW` flag + `STARTF_USESHOWWINDOW(SW_HIDE)` to suppress the CMD window popup every time ffmpeg runs
+- Falls back to system PATH gracefully if not bundled
+
+### 📦 Build
+- Version bumped to 1.2.2
+- Bundled EXE size ~140 MB (was ~69 MB)
+
 ## v1.2.1 (2026-07-16) — Cross-Platform Thumbnails
 
 ### 🎬 Video Thumbnail Fix
