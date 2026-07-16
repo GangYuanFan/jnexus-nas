@@ -87,6 +87,19 @@ export default function Layout({ children }: Props) {
         </div>
       </nav>
 
+      {/* Sidebar overlay (mobile) */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="sidebar-overlay"
+          style={{
+            display: 'none',
+            position: 'fixed', inset: 0, zIndex: 49,
+            background: 'rgba(0,0,0,0.5)',
+          } as React.CSSProperties}
+        />
+      )}
+
       {/* Main */}
       <main
         style={{
@@ -118,8 +131,12 @@ export default function Layout({ children }: Props) {
           height: 40,
           borderRadius: 10,
           cursor: 'pointer',
-          fontSize: 18,
+          fontSize: 20,
+          lineHeight: '40px',
+          textAlign: 'center',
+          padding: 0,
         } as React.CSSProperties}
+        aria-label="選單"
       >
         ☰
       </button>
@@ -184,11 +201,28 @@ export default function Layout({ children }: Props) {
       )}
 
       <style>{`
+        .nav-item {
+          cursor: pointer;
+          padding: 0.75rem 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 100%;
+          transition: background 0.2s;
+          border-radius: 12px;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.04); }
+        .nav-item.active { background: rgba(255,255,255,0.08); }
+
         @media (max-width: 768px) {
           nav { transform: translateX(-100%); }
           nav.open { transform: translateX(0); }
-          main { margin-left: 0; padding: 1rem; padding-top: 3.5rem; }
-          #sidebar-toggle { display: flex !important; }
+          main { margin-left: 0; padding: 0.75rem; padding-top: 4rem; }
+          #sidebar-toggle { display: flex !important; align-items: center; justify-content: center; width: 44px; height: 44px; top: 8px; left: 10px; }
+          .sidebar-overlay { display: block !important; }
+          .card { padding: 1rem !important; }
+          .glass { padding: 0.75rem 1rem !important; }
+          .nav-item { padding: 1rem 0; }
         }
       `}</style>
     </div>

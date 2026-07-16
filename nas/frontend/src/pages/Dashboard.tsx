@@ -1,40 +1,34 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
 import { useApp } from '../App'
-import type { SysInfo, DiskInfo } from '../lib/types'
+import type { SysInfo } from '../lib/types'
 import AnimatedCountUp from '../components/react-bits/AnimatedCountUp'
 
 export default function Dashboard() {
   const { state } = useApp()
   const [sysInfo, setSysInfo] = useState<SysInfo | null>(null)
-  const [disks, setDisks] = useState<DiskInfo[]>([])
-  const [stats, setStats] = useState<{ total_files: number; total_dirs: number } | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [info, diskData, statData] = await Promise.all([
-          api.getSysInfo(),
-          api.getDisks(),
-          api.getStats(),
-        ])
-        setSysInfo(info)
-        setDisks(diskData)
-        setStats(statData)
-      } catch (err) {
-        console.error('Failed to load dashboard', err)
-      } finally {
-        setLoading(false)
-      }
+  const load = useCallback(async () => {
+    try {
+      const info = await api.getSysInfo()
+      setSysInfo(info)
+    } catch (err) {
+      console.error('Failed to load dashboard', err)
+    } finally {
+      setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
     load()
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [load])
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B'
+  const formatBytes = (gb: number) => {
+    if (gb === 0) return '0 B'
+    const bytes = gb * 1024 * 1024 * 1024
     const k = 1024
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -54,6 +48,10 @@ export default function Dashboard() {
       </div>
     )
   }
+
+  const totalDisksGB = sysInfo ? sysInfo.disks.reduce((s, d) => s + d.total_gb, 0) : 0
+  const usedDisksGB = sysInfo ? sysInfo.disks.reduce((s, d) => s + d.used_gb, 0) : 0
+  const diskPercent = totalDisksGB > 0 ? (usedDisksGB / totalDisksGB) * 100 : 0
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease forwards' }}>
@@ -94,16 +92,16 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-              🖥️ CPU <AnimatedCountUp value={sysInfo.cpu_percent} suffix="%" />
+              🖥️ CPU <AnimatedCountUp value={sysInfo.cpu_percent} suffix="%" decimals={1} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-              💾 RAM {formatBytes(sysInfo.memory_used)} / {formatBytes(sysInfo.memory_total)}
+              💾 RAM {formatBytes(sysInfo.memory.used_gb)} / {formatBytes(sysInfo.memory.total_gb)}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-              📦 {formatBytes(sysInfo.disk_used)} / {formatBytes(sysInfo.disk_total)}
+              📦 {formatBytes(usedDisksGB)} / {formatBytes(totalDisksGB)}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-              ⏱️ {sysInfo.uptime}
+              ⏱️ {sysInfo.uptime_human}
             </div>
           </div>
         </div>
@@ -112,15 +110,17 @@ export default function Dashboard() {
       {/* Stat Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
         gap: '1rem',
         marginBottom: '2rem',
       }}>
         {[
-          { label: '總儲存空間', value: sysInfo ? formatBytes(sysInfo.disk_total) : '—', sub: '總容量', color: '#00f2ff' },
-          { label: '已使用', value: sysInfo ? formatBytes(sysInfo.disk_used) : '—', sub: `${sysInfo?.disk_percent.toFixed(1)}%`, color: '#4ade80' },
-          { label: '檔案總數', value: stats ? stats.total_files.toLocaleString() : '—', sub: '個檔案', color: '#fbbf24' },
-          { label: '目錄總數', value: stats ? stats.total_dirs.toLocaleString() : '—', sub: '個目錄', color: '#a78bfa' },
+          { label: '總儲存空間', value: formatBytes(totalDisksGB), sub: '總容量', color: '#00f2ff' },
+          { label: '已使用', value: formatBytes(usedDisksGB), sub: `${diskPercent.toFixed(1)}%`, color: '#4ade80' },
+          ...(sysInfo ? [
+            { label: '記憶體', value: formatBytes(sysInfo.memory.used_gb), sub: `${sysInfo.memory.percent.toFixed(0)}% 已使用`, color: '#fbbf24' },
+            { label: 'CPU', value: `${sysInfo.cpu_percent.toFixed(1)}%`, sub: `${sysInfo.cpu_count} 核心`, color: '#a78bfa' },
+          ] : []),
         ].map((card, i) => (
           <div
             key={i}
@@ -157,7 +157,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
             <span style={{ color: 'rgba(255,255,255,0.6)' }}>磁碟使用量</span>
             <span style={{ color: 'rgba(255,255,255,0.4)' }}>
-              {formatBytes(sysInfo.disk_used)} / {formatBytes(sysInfo.disk_total)}
+              {formatBytes(usedDisksGB)} / {formatBytes(totalDisksGB)}
             </span>
           </div>
           <div style={{
@@ -169,21 +169,21 @@ export default function Dashboard() {
             <div style={{
               height: '100%',
               borderRadius: 4,
-              width: `${sysInfo.disk_percent}%`,
-              background: sysInfo.disk_percent > 90
+              width: `${diskPercent}%`,
+              background: diskPercent > 90
                 ? 'linear-gradient(90deg, #ff5252, #ff7843)'
                 : 'linear-gradient(90deg, #4ade80, #00f2ff)',
               transition: 'width 1s ease',
             }} />
           </div>
-          <div style={{ textAlign: 'right', marginTop: 4, fontSize: 12, color: sysInfo.disk_percent > 90 ? '#ff5252' : 'rgba(255,255,255,0.4)' }}>
-            {sysInfo.disk_percent.toFixed(1)}%
+          <div style={{ textAlign: 'right', marginTop: 4, fontSize: 12, color: diskPercent > 90 ? '#ff5252' : 'rgba(255,255,255,0.4)' }}>
+            {diskPercent.toFixed(1)}%
           </div>
         </div>
       )}
 
       {/* Storage Pool */}
-      {disks.length > 0 && (
+      {sysInfo && sysInfo.disks.length > 0 && (
         <>
           <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'rgba(255,255,255,0.6)' }}>
             🖴 儲存池
@@ -193,7 +193,7 @@ export default function Dashboard() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
             gap: '1rem',
           }}>
-            {disks.map((disk, i) => (
+            {sysInfo.disks.map((disk, i) => (
               <div
                 key={i}
                 className="glass glass-hover"
@@ -214,11 +214,11 @@ export default function Dashboard() {
                   height: '100%',
                   background: disk.percent > 90 ? '#ff5252' : disk.percent > 70 ? '#fbbf24' : '#4ade80',
                 }} />
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, display: 'block' }}>
-                  {disk.name}
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
+                  {disk.label}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                  {formatBytes(disk.used)} / {formatBytes(disk.total)}
+                  {formatBytes(disk.used_gb)} / {formatBytes(disk.total_gb)}
                 </div>
                 <div style={{
                   height: 6,
@@ -261,14 +261,6 @@ export default function Dashboard() {
         >
           <div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 1 }}>
-              Server
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-              {state.config.server_name}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 1 }}>
               根目錄
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
@@ -285,10 +277,10 @@ export default function Dashboard() {
           </div>
           <div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 1 }}>
-              垃圾桶
+              發布日期
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-              {state.config.trash_enabled ? '✅ 啟用' : '❌ 停用'}
+              {state.config.release_date}
             </div>
           </div>
         </div>

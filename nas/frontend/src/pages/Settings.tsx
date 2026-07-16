@@ -26,12 +26,9 @@ export default function Settings() {
             🖥️ 伺服器資訊
           </h3>
           {[
-            { label: '伺服器名稱', value: config.server_name },
             { label: '版本', value: config.version },
             { label: '發布日期', value: config.release_date },
             { label: '根目錄', value: config.root },
-            { label: '垃圾桶', value: config.trash_enabled ? '✅ 啟用' : '❌ 停用' },
-            { label: '垃圾桶大小', value: config.trash_size > 0 ? `${(config.trash_size / 1024 / 1024 / 1024).toFixed(2)} GB` : '無限制' },
           ].map((item, i) => (
             <div
               key={i}
@@ -39,7 +36,7 @@ export default function Settings() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 padding: '0.6rem 0',
-                borderBottom: i < 5 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                 fontSize: 13,
               }}
             >

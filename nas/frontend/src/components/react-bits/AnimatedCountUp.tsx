@@ -12,7 +12,7 @@ export default function AnimatedCountUp({ value, duration = 1000, suffix = '', p
   const [display, setDisplay] = useState(0)
   const startRef = useRef<number | null>(null)
   const fromRef = useRef(0)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number>(0)
 
   useEffect(() => {
     fromRef.current = display

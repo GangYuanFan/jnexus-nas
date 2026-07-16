@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 
 interface Props {
-  onLogin: () => void
+  onLogin: (password: string) => void
 }
 
 export default function AuthGate({ onLogin }: Props) {
@@ -17,7 +17,7 @@ export default function AuthGate({ onLogin }: Props) {
     try {
       const res = await api.login(password)
       if (res.success) {
-        onLogin()
+        onLogin(password)
       } else {
         setError('密碼錯誤')
       }
