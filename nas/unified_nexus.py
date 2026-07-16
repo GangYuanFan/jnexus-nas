@@ -1179,10 +1179,8 @@ def _resolve_ffmpeg():
     """Resolve ffmpeg binary: bundled EXE → system PATH → raw command.
     On Windows, returns startupinfo to suppress the console window flash."""
     startupinfo = None
-    creationflags = 0
 
     if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
         bundle_dir = sys._MEIPASS
         ffmpeg_path = os.path.join(bundle_dir, 'nas', 'bin', 'ffmpeg.exe')
         if os.path.exists(ffmpeg_path):
@@ -1190,23 +1188,20 @@ def _resolve_ffmpeg():
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
                 startupinfo.wShowWindow = 0  # SW_HIDE
-                creationflags = 0x08000000  # CREATE_NO_WINDOW
-            return ffmpeg_path, startupinfo, creationflags
+            return ffmpeg_path, startupinfo
 
-    # Fallback: system PATH or raw command
-    ffmpeg_bin = (
-        '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
-        if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg')
-        else shutil.which('ffmpeg') or 'ffmpeg'
-    )
+    # Try system PATH first
+    ffmpeg_bin = shutil.which('ffmpeg') or 'ffmpeg'
+    # Linux brew fallback for WSL
+    if not shutil.which('ffmpeg') and os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg'):
+        ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
 
     if sys.platform == 'win32':
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 0  # SW_HIDE
-        creationflags = 0x08000000  # CREATE_NO_WINDOW
 
-    return ffmpeg_bin, startupinfo, creationflags
+    return ffmpeg_bin, startupinfo
 
 
 def get_thumbnail():
@@ -1240,7 +1235,7 @@ def get_thumbnail():
         # 2. Video Thumbnails (Pure Memory via Pipe)
         if ext in VID_EXTS:
             import shutil
-            ffmpeg_bin, si, cf = _resolve_ffmpeg()
+            ffmpeg_bin, si = _resolve_ffmpeg()
             try:
                 for timestamp in ['00:00:01', '00:00:00']:
                     cmd = [
@@ -1249,9 +1244,12 @@ def get_thumbnail():
                         '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
                     ]
                     result = subprocess.run(cmd, capture_output=True, timeout=10,
-                                            startupinfo=si, creationflags=cf)
+                                            startupinfo=si)
                     if result.returncode == 0 and result.stdout:
                         return Response(result.stdout, mimetype='image/jpeg')
+                    elif result.stderr:
+                        err_text = result.stderr.decode('utf-8', errors='replace')
+                        logger.error(f"ffmpeg exit code {result.returncode}: {err_text}")
             except Exception as ve:
                 logger.error(f"Video pipe error: {ve}")
 
