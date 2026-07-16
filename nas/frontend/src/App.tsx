@@ -48,22 +48,17 @@ export default function App() {
     } catch {}
   }, [])
 
-  // On mount, try to restore session from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem('nas_password')
-    if (stored) {
-      api.setPassword(stored)
-      // Try loading config to verify password works
-      refreshConfig().then(() => {
-        // If config loaded successfully, password is still valid
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await api.check()
+      if (res.authenticated) {
         setState(s => ({ ...s, authenticated: true }))
-      }).catch(() => {
-        // Password expired or wrong — clear it
-        localStorage.removeItem('nas_password')
-        api.clearPassword()
-      })
-    }
+        await refreshConfig()
+      }
+    } catch {}
   }, [refreshConfig])
+
+  useEffect(() => { checkAuth() }, [checkAuth])
 
   const setPage = useCallback((page: Page) => {
     setState(s => ({ ...s, page }))
@@ -73,21 +68,16 @@ export default function App() {
     setState(s => ({ ...s, currentPath: path }))
   }, [])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('nas_password')
-    api.clearPassword()
+  const logout = useCallback(async () => {
+    await api.logout()
     setState(s => ({ ...s, authenticated: false }))
   }, [])
 
-  const handleLogin = useCallback((password: string) => {
-    localStorage.setItem('nas_password', password)
-    api.setPassword(password)
-    setState(s => ({ ...s, authenticated: true }))
-    refreshConfig()
-  }, [refreshConfig])
-
   if (!state.authenticated) {
-    return <AuthGate onLogin={handleLogin} />
+    return <AuthGate onLogin={() => {
+      setState(s => ({ ...s, authenticated: true }))
+      refreshConfig()
+    }} />
   }
 
   const renderPage = () => {

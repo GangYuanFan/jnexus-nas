@@ -45,7 +45,7 @@ export default function FileManager() {
   const [shareUrl, setShareUrl] = useState('')
   const [editFile, setEditFile] = useState<FileEntry | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const loadFiles = useCallback(async (path: string) => {
     setLoading(true)

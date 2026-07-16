@@ -1,20 +1,6 @@
-import type { SysInfo, BackendFileEntry, TrashEntry, ServerConfig } from './types';
+import type { SysInfo, FileEntry, TrashEntry, DiskInfo, ServerConfig } from './types';
 
 const BASE = '/nas/api';
-
-let PASSWORD = '';
-
-function pwParam(): string {
-  return PASSWORD ? `?password=${encodeURIComponent(PASSWORD)}` : '';
-}
-
-function pwArg(): string {
-  return PASSWORD ? `&password=${encodeURIComponent(PASSWORD)}` : '';
-}
-
-function pwBody(): Record<string, string> {
-  return PASSWORD ? { password: PASSWORD } : {};
-}
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -28,147 +14,128 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-function fileEntryFromBackend(b: BackendFileEntry, parentPath: string = '') {
-  const name = b.name;
-  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
-  const imageExts = new Set(['jpg','jpeg','png','gif','webp','svg','bmp']);
-  const videoExts = new Set(['mp4','webm','mkv','mov','avi']);
-  const audioExts = new Set(['mp3','wav','ogg','flac','m4a','aac']);
-  const docExts = new Set(['pdf','doc','docx','xls','xlsx','ppt','pptx','csv','txt','md','json','xml','yaml','yml','log','cfg','ini','conf']);
-  const path = parentPath
-    ? (parentPath.endsWith('/') ? parentPath + name : parentPath + '/' + name)
-    : name;
-  return {
-    path,
-    name,
-    type: (b.is_dir ? 'dir' : 'file') as 'file' | 'dir',
-    size: b.size ?? 0,
-    modified: new Date((b.mtime as number) * 1000).toISOString(),
-    ext,
-    is_media: imageExts.has(ext) || videoExts.has(ext) || audioExts.has(ext),
-    is_image: imageExts.has(ext),
-    is_video: videoExts.has(ext),
-    is_audio: audioExts.has(ext),
-    is_doc: docExts.has(ext),
-  };
-}
-
 export const api = {
-  setPassword(pw: string) { PASSWORD = pw; },
-  clearPassword() { PASSWORD = ''; },
-
   // Auth
   login: (password: string) =>
-    fetchJSON<{ success: boolean }>(`${BASE}/auth`, {
+    fetchJSON<{ success: boolean }>(`${BASE}/login`, {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
 
-  // Config — no auth required
+  logout: () => fetchJSON(`${BASE}/logout`, { method: 'POST' }),
+
+  check: () => fetchJSON<{ authenticated: boolean }>(`${BASE}/check`),
+
+  // Config
   getConfig: () => fetchJSON<ServerConfig>(`${BASE}/config`),
 
-  // System info
-  getSysInfo: () =>
-    fetchJSON<SysInfo>(`${BASE}/sysinfo${pwParam()}`),
+  // System
+  getSysInfo: () => fetchJSON<SysInfo>(`${BASE}/sysinfo`),
 
-  // Files — returns array directly
-  listFiles: async (path: string, _page?: number, _perPage?: number) => {
-    const raw = await fetchJSON<BackendFileEntry[]>(`${BASE}/files${pwParam()}&path=${encodeURIComponent(path || '/')}`);
-    return {
-      entries: raw.map(e => fileEntryFromBackend(e, path)),
-      path,
-      parent: path === '/' ? null : path.split('/').slice(0, -1).join('/') || '/',
-    };
-  },
+  getDisks: () => fetchJSON<DiskInfo[]>(`${BASE}/disks`),
 
-  searchFiles: async (query: string, page = 1) => {
-    const raw = await fetchJSON<{ entries: BackendFileEntry[]; total: number }>(
-      `${BASE}/search${pwArg()}&q=${encodeURIComponent(query)}&page=${page}`
-    );
-    return {
-      entries: raw.entries.map(e => fileEntryFromBackend(e)),
-      total: raw.total,
-    };
-  },
+  getStats: () => fetchJSON<{
+    total_files: number;
+    total_dirs: number;
+    active_users: number;
+  }>(`${BASE}/stats`),
+
+  // Files
+  listFiles: (path: string, page = 1, perPage = 100) =>
+    fetchJSON<{ entries: FileEntry[]; path: string; parent: string | null }>(
+      `${BASE}/files?path=${encodeURIComponent(path)}&page=${page}&per_page=${perPage}`
+    ),
+
+  searchFiles: (query: string, page = 1) =>
+    fetchJSON<{ entries: FileEntry[]; total: number }>(
+      `${BASE}/search?q=${encodeURIComponent(query)}&page=${page}`
+    ),
 
   deleteFiles: (paths: string[]) =>
     fetchJSON<{ success: boolean }>(`${BASE}/delete`, {
       method: 'POST',
-      body: JSON.stringify({ paths, ...pwBody() }),
+      body: JSON.stringify({ paths }),
     }),
 
   renameFile: (oldPath: string, newName: string) =>
     fetchJSON<{ success: boolean }>(`${BASE}/rename`, {
       method: 'POST',
-      body: JSON.stringify({ path: oldPath, new_name: newName, ...pwBody() }),
+      body: JSON.stringify({ path: oldPath, new_name: newName }),
+    }),
+
+  moveFiles: (paths: string[], destination: string) =>
+    fetchJSON<{ success: boolean }>(`${BASE}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ paths, destination }),
+    }),
+
+  copyFiles: (paths: string[], destination: string) =>
+    fetchJSON<{ success: boolean }>(`${BASE}/copy`, {
+      method: 'POST',
+      body: JSON.stringify({ paths, destination }),
     }),
 
   createFolder: (path: string) =>
     fetchJSON<{ success: boolean }>(`${BASE}/mkdir`, {
       method: 'POST',
-      body: JSON.stringify({ path, ...pwBody() }),
+      body: JSON.stringify({ path }),
     }),
 
-  uploadUrl: () => `${BASE}/upload${pwParam()}`,
+  uploadUrl: () => `${BASE}/upload`,
 
-  downloadUrl: (path: string) => `${BASE}/download${pwParam()}&path=${encodeURIComponent(path)}`,
+  downloadUrl: (path: string) => `${BASE}/download?path=${encodeURIComponent(path)}`,
 
-  // Trash — returns { items: [...] }
-  listTrash: async () => {
-    const res = await fetchJSON<{ items: TrashEntry[] }>(`${BASE}/trash/list${pwParam()}`);
-    return res.items;
-  },
+  // Trash
+  listTrash: () => fetchJSON<TrashEntry[]>(`${BASE}/trash`),
 
   restoreTrash: (path: string) =>
     fetchJSON<{ success: boolean }>(`${BASE}/trash/restore`, {
       method: 'POST',
-      body: JSON.stringify({ path, ...pwBody() }),
+      body: JSON.stringify({ path }),
     }),
 
   deleteTrash: (path: string) =>
-    fetchJSON<{ success: boolean }>(`${BASE}/trash/permanent-delete`, {
+    fetchJSON<{ success: boolean }>(`${BASE}/trash/delete`, {
       method: 'POST',
-      body: JSON.stringify({ path, ...pwBody() }),
+      body: JSON.stringify({ path }),
     }),
 
   emptyTrash: () =>
     fetchJSON<{ success: boolean }>(`${BASE}/trash/empty`, {
       method: 'POST',
-      body: JSON.stringify(pwBody()),
     }),
 
   // Shares
-  createShare: (path: string, expires?: string, maxDownloads?: number, sharePassword?: string) =>
-    fetchJSON<{ token: string; url: string }>(`${BASE}/shares/create`, {
+  createShare: (path: string, expires?: string, maxDownloads?: number, password?: string) =>
+    fetchJSON<{ token: string; url: string }>(`${BASE}/share`, {
       method: 'POST',
-      body: JSON.stringify({ path, expires, max_downloads: maxDownloads, password: sharePassword, ...pwBody() }),
+      body: JSON.stringify({ path, expires, max_downloads: maxDownloads, password }),
     }),
 
-  listShares: () =>
-    fetchJSON<any[]>(`${BASE}/shares/list${pwParam()}`),
+  listShares: () => fetchJSON<any[]>(`${BASE}/shares`),
 
   deleteShare: (token: string) =>
-    fetchJSON<{ success: boolean }>(`${BASE}/shares/delete`, {
-      method: 'POST',
-      body: JSON.stringify({ token, ...pwBody() }),
-    }),
+    fetchJSON<{ success: boolean }>(`${BASE}/share/${token}`, { method: 'DELETE' }),
+
+  // Terminal
+  terminalUrl: () => `${BASE}/terminal`,
+
+  // WebDAV
+  webdavUrl: () => `${BASE}/webdav`,
+
+  // Media
+  viewUrl: (path: string) => `${BASE}/view?path=${encodeURIComponent(path)}`,
 
   // File content
   readFile: (path: string) =>
-    fetchJSON<{ content: string }>(`${BASE}/read${pwParam()}&path=${encodeURIComponent(path)}`),
+    fetchJSON<{ content: string }>(`${BASE}/read?path=${encodeURIComponent(path)}`),
 
   saveFile: (path: string, content: string) =>
     fetchJSON<{ success: boolean }>(`${BASE}/save`, {
       method: 'POST',
-      body: JSON.stringify({ path, content, ...pwBody() }),
+      body: JSON.stringify({ path, content }),
     }),
 
-  // View (media/doc)
-  viewUrl: (path: string) => `${BASE}/view${pwParam()}&path=${encodeURIComponent(path)}`,
-
-  // WebDAV
-  webdavUrl: () => `${BASE}/webdav/status${pwParam()}`,
-
-  // Terminal — not a web endpoint, opens port
-  terminalUrl: () => `${BASE}/terminal${pwParam()}`,
+  // Icon
+  iconUrl: (name: string) => `${BASE}/icon/${encodeURIComponent(name)}`,
 };
