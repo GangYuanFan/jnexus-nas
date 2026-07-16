@@ -1,16 +1,34 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+from PyInstaller.utils.hooks import Tree
+
+
+# Pick only the runtime-essential files from nas/, skip 81MB node_modules
+_nas_datas = list(Tree(
+    'nas',
+    excludes=[
+        'frontend/node_modules',        # 81MB dev-only, NOT needed at runtime
+        'frontend/node_modules/*',
+        '__pycache__',
+        '*.pyc',
+        '.gitkeep',
+    ],
+))
+
+
 a = Analysis(
     ['nas_gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('nas', 'nas')],
+    datas=_nas_datas,
     hiddenimports=['requests', 'flask', 'flask_cors', 'dotenv', 'psutil', 'PIL', 'nas.unified_nexus'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['tkinter', 'test', 'unittest', 'setuptools', 'pip', 'distutils',
+              'numpy', 'matplotlib', 'scipy', 'pandas', 'PIL.ImageShow',
+              'PIL.ImageQt', 'PIL.ImageGrab', 'PIL.Features'],
     noarchive=False,
     optimize=0,
 )
