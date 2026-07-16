@@ -1153,6 +1153,28 @@ def save_document():
 
 
 @nas_bp.route('/api/thumbnail')
+@nas_bp.route('/api/diag_ffmpeg')
+@require_auth
+def diag_ffmpeg():
+    """Diagnostic: show ffmpeg resolution state."""
+    import sys, os, shutil, subprocess
+    info = {
+        'sys.frozen': getattr(sys, 'frozen', False),
+        'sys._MEIPASS': getattr(sys, '_MEIPASS', None),
+        'sys.platform': sys.platform,
+        'shutil.which(ffmpeg)': shutil.which('ffmpeg'),
+    }
+    if getattr(sys, 'frozen', False):
+        bundle_fp = os.path.join(sys._MEIPASS, 'nas', 'bin', 'ffmpeg.exe')
+        info['bundle_path'] = bundle_fp
+        info['bundle_path_exists'] = os.path.exists(bundle_fp)
+    # Also check source dir
+    src_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg.exe')
+    info['source_bin_path'] = src_fp
+    info['source_bin_exists'] = os.path.exists(src_fp)
+    return jsonify(info)
+
+
 def _resolve_ffmpeg():
     """Resolve ffmpeg binary: bundled EXE → system PATH → raw command.
     On Windows, returns startupinfo to suppress the console window flash."""
