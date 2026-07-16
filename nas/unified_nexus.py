@@ -1192,8 +1192,13 @@ def get_thumbnail():
 
         # 2. Video Thumbnails (Pure Memory via Pipe)
         if ext in VID_EXTS:
-            import subprocess
-            ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
+            import subprocess, shutil
+            # Cross-platform ffmpeg lookup: Linux brew path → PATH → raw cmd
+            ffmpeg_bin = (
+                '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
+                if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg')
+                else shutil.which('ffmpeg') or 'ffmpeg'
+            )
             try:
                 for timestamp in ['00:00:01', '00:00:00']:
                     cmd = [
