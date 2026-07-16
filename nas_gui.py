@@ -22,8 +22,8 @@ from PySide6.QtCore import Qt
 from PySide6 import QtGui
 
 # Version
-NAS_TOOL_VERSION = '1.2.0'
-NAS_TOOL_RELEASE_DATE = '2026-07-11'
+NAS_TOOL_VERSION = '1.2.1'
+NAS_TOOL_RELEASE_DATE = '2026-07-16'
 
 # Setup GUI Debug Logging
 logging.basicConfig(

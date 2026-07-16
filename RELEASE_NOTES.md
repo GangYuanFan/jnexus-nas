@@ -1,5 +1,16 @@
 # J.NAS Release Notes
 
+## v1.2.1 (2026-07-16) — Cross-Platform Thumbnails
+
+### 🎬 Video Thumbnail Fix
+- ffmpeg path lookup now cross-platform (Linux brew path → PATH → raw cmd)
+- Windows NAS GUI now needs ffmpeg installed for .mp4 thumbnails
+- Added ffmpeg prerequisite to README
+
+### 📦 Build
+- Version bumped to 1.2.1
+- Rolled back to a979331 baseline, keeping only ffmpeg fix
+
 ## v1.2.0 (2026-07-16) — Batch Share, Password Fix, Auto Cleanup
 
 ### 🔗 New: Batch Share

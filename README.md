@@ -1,6 +1,6 @@
 # J.NAS — Network Attached Storage System
 
-**Version 1.2.0** | A lightweight, browser-based NAS management tool with a desktop GUI controller.
+**Version 1.2.1** | A lightweight, browser-based NAS management tool with a desktop GUI controller.
 
 ![Dashboard Screenshot](https://img.shields.io/badge/status-stable-brightgreen)
 
@@ -115,6 +115,12 @@ Once authenticated, the NAS remembers your session for **5 minutes** via `localS
 ## 🖥️ NAS Tool GUI (Desktop)
 
 ### Installation (Windows)
+
+> **Prerequisites:** ffmpeg (for video thumbnails)
+> ```powershell
+> winget install ffmpeg
+> ```
+> Or download from https://ffmpeg.org/download.html — make sure it's in your `PATH`.
 
 **Step 1 — Build the executable**
 
