@@ -1,28 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
-import os, glob
-
-
-# Walk nas/ manually — compatible with all PyInstaller versions
-_nas_datas = []
-nas_dir = 'nas'
-for dirpath, dirnames, filenames in os.walk(nas_dir):
-    # Skip 81MB of dev-only node_modules
-    dirnames[:] = [d for d in dirnames if d != 'node_modules']
-    for fn in filenames:
-        if fn.endswith('.pyc') or fn.endswith('.pyo'):
-            continue
-        src = os.path.join(dirpath, fn)
-        dst = os.path.relpath(dirpath, nas_dir)
-        _nas_datas.append((src, dst))
-
-
 a = Analysis(
     ['nas_gui.py'],
     pathex=[],
     binaries=[],
-    datas=_nas_datas,
+    datas=[('nas', 'nas')],  # a979331 has no node_modules — safe & simple
     hiddenimports=['requests', 'flask', 'flask_cors', 'dotenv', 'psutil', 'PIL', 'nas.unified_nexus'],
     hookspath=[],
     hooksconfig={},
