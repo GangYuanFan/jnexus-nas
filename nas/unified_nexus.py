@@ -125,16 +125,7 @@ def verify_auth():
 @nas_bp.route('/')
 def serve_nas_index():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Serve React frontend from frontend-dist
-    frontend_dir = os.path.join(current_dir, 'frontend-dist')
-    if os.path.exists(os.path.join(frontend_dir, 'index.html')):
-        return send_from_directory(frontend_dir, 'index.html')
     return send_from_directory(current_dir, 'index.html')
-
-@nas_bp.route('/frontend/assets/<path:filename>')
-def serve_frontend_assets(filename):
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(os.path.join(current_dir, 'frontend-dist', 'assets'), filename)
 
 @nas_bp.route('/api/config')
 def nas_config():
@@ -1192,13 +1183,8 @@ def get_thumbnail():
 
         # 2. Video Thumbnails (Pure Memory via Pipe)
         if ext in VID_EXTS:
-            import subprocess, shutil
-            # Cross-platform ffmpeg lookup: Linux brew path → PATH → raw cmd
-            ffmpeg_bin = (
-                '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
-                if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg')
-                else shutil.which('ffmpeg') or 'ffmpeg'
-            )
+            import subprocess
+            ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
             try:
                 for timestamp in ['00:00:01', '00:00:00']:
                     cmd = [
