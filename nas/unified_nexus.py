@@ -1156,52 +1156,90 @@ def save_document():
 @nas_bp.route('/api/diag_ffmpeg')
 @require_auth
 def diag_ffmpeg():
-    """Diagnostic: show ffmpeg resolution state."""
+    """Diagnostic: show ffmpeg resolution state and run smoke test."""
     import sys, os, shutil, subprocess
+    
+    # Clear cache so we can test fresh
+    global _FFMPEG_CACHED
+    _FFMPEG_CACHED = None
+
+    which_fp = shutil.which('ffmpeg')
+    bundled_fp = None
+    if getattr(sys, 'frozen', False):
+        bundled_fp = os.path.join(sys._MEIPASS, 'nas', 'bin', 'ffmpeg.exe')
+
+    # Run the full resolution flow
+    resolved, si = _resolve_ffmpeg()
+
+    # Smoke test the resolved binary
+    smoke = None
+    if resolved:
+        try:
+            r = subprocess.run([resolved, '-version'], capture_output=True, timeout=5, startupinfo=si)
+            version_out = r.stdout.decode('utf-8', errors='replace').split('\n')[0] if r.stdout else ''
+            smoke = {'ok': r.returncode == 0, 'version': version_out, 'exit_code': r.returncode}
+        except Exception as e:
+            smoke = {'ok': False, 'error': str(e)}
+
     info = {
         'sys.frozen': getattr(sys, 'frozen', False),
         'sys._MEIPASS': getattr(sys, '_MEIPASS', None),
         'sys.platform': sys.platform,
-        'shutil.which(ffmpeg)': shutil.which('ffmpeg'),
+        'shutil.which(ffmpeg)': which_fp,
+        'bundled_path': bundled_fp,
+        'bundled_exists': os.path.exists(bundled_fp) if bundled_fp else None,
+        'resolved_path': resolved,
+        'smoke_test': smoke,
     }
-    if getattr(sys, 'frozen', False):
-        bundle_fp = os.path.join(sys._MEIPASS, 'nas', 'bin', 'ffmpeg.exe')
-        info['bundle_path'] = bundle_fp
-        info['bundle_path_exists'] = os.path.exists(bundle_fp)
-    # Also check source dir
-    src_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', 'ffmpeg.exe')
-    info['source_bin_path'] = src_fp
-    info['source_bin_exists'] = os.path.exists(src_fp)
     return jsonify(info)
 
 
+_FFMPEG_CACHED = None
+
 def _resolve_ffmpeg():
-    """Resolve ffmpeg binary: bundled EXE → system PATH → raw command.
-    On Windows, returns startupinfo to suppress the console window flash."""
+    """Resolve & verify ffmpeg: system PATH first (winget), then raw cmd.
+    On Windows, returns startupinfo to suppress the console window flash.
+    Result cached after first successful verification."""
+    global _FFMPEG_CACHED
+    if _FFMPEG_CACHED is not None:
+        return _FFMPEG_CACHED
+
     startupinfo = None
-
-    if getattr(sys, 'frozen', False):
-        bundle_dir = sys._MEIPASS
-        ffmpeg_path = os.path.join(bundle_dir, 'nas', 'bin', 'ffmpeg.exe')
-        if os.path.exists(ffmpeg_path):
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = 0  # SW_HIDE
-            return ffmpeg_path, startupinfo
-
-    # Try system PATH first
-    ffmpeg_bin = shutil.which('ffmpeg') or 'ffmpeg'
-    # Linux brew fallback for WSL
-    if not shutil.which('ffmpeg') and os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg'):
-        ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
-
     if sys.platform == 'win32':
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = 0  # SW_HIDE
+        startupinfo.wShowWindow = 0
 
-    return ffmpeg_bin, startupinfo
+    # Prefer system PATH (winget-installed) over bundled binary
+    ffmpeg_bin = shutil.which('ffmpeg')
+    if ffmpeg_bin:
+        _FFMPEG_CACHED = (ffmpeg_bin, startupinfo)
+        return _FFMPEG_CACHED
+
+    # Fallback: bundled binary in _MEIPASS
+    if getattr(sys, 'frozen', False):
+        bundled = os.path.join(sys._MEIPASS, 'nas', 'bin', 'ffmpeg.exe')
+        if os.path.exists(bundled) and _verify_ffmpeg(bundled, startupinfo):
+            _FFMPEG_CACHED = (bundled, startupinfo)
+            return _FFMPEG_CACHED
+
+    # Linux brew fallback
+    if os.path.exists('/home/linuxbrew/.linuxbrew/bin/ffmpeg'):
+        ffmpeg_bin = '/home/linuxbrew/.linuxbrew/bin/ffmpeg'
+    else:
+        ffmpeg_bin = 'ffmpeg'
+
+    _FFMPEG_CACHED = (ffmpeg_bin, startupinfo)
+    return _FFMPEG_CACHED
+
+
+def _verify_ffmpeg(path, startupinfo):
+    """Quick smoke-test: run 'ffmpeg -version' to confirm binary works."""
+    try:
+        r = subprocess.run([path, '-version'], capture_output=True, timeout=5, startupinfo=startupinfo)
+        return r.returncode == 0
+    except Exception:
+        return False
 
 
 def get_thumbnail():
