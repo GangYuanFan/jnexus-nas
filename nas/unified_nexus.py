@@ -1236,22 +1236,22 @@ def get_thumbnail():
         if ext in VID_EXTS:
             import shutil
             ffmpeg_bin, si = _resolve_ffmpeg()
-            try:
-                for timestamp in ['00:00:01', '00:00:00']:
-                    cmd = [
-                        ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
-                        '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
-                        '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
-                    ]
+            for timestamp in ['00:00:01', '00:00:00']:
+                cmd = [
+                    ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
+                    '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
+                    '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
+                ]
+                try:
                     result = subprocess.run(cmd, capture_output=True, timeout=10,
                                             startupinfo=si)
                     if result.returncode == 0 and result.stdout:
                         return Response(result.stdout, mimetype='image/jpeg')
-                    elif result.stderr:
-                        err_text = result.stderr.decode('utf-8', errors='replace')
-                        logger.error(f"ffmpeg exit code {result.returncode}: {err_text}")
-            except Exception as ve:
-                logger.error(f"Video pipe error: {ve}")
+                except Exception as ve:
+                    err_detail = str(ve)
+                    if result and hasattr(result, 'stderr') and result.stderr:
+                        err_detail += ' | STDERR: ' + result.stderr.decode('utf-8', errors='replace')
+                    return jsonify({"error": f"ffmpeg failed at {timestamp}", "detail": err_detail}), 500
 
     except Exception as e:
         logger.error(f"General thumb error: {e}")
