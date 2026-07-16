@@ -1,20 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
-from PyInstaller.utils.hooks import Tree
+import os, glob
 
 
-# Pick only the runtime-essential files from nas/, skip 81MB node_modules
-_nas_datas = list(Tree(
-    'nas',
-    excludes=[
-        'frontend/node_modules',        # 81MB dev-only, NOT needed at runtime
-        'frontend/node_modules/*',
-        '__pycache__',
-        '*.pyc',
-        '.gitkeep',
-    ],
-))
+# Walk nas/ manually — compatible with all PyInstaller versions
+_nas_datas = []
+nas_dir = 'nas'
+for dirpath, dirnames, filenames in os.walk(nas_dir):
+    # Skip 81MB of dev-only node_modules
+    dirnames[:] = [d for d in dirnames if d != 'node_modules']
+    for fn in filenames:
+        if fn.endswith('.pyc') or fn.endswith('.pyo'):
+            continue
+        src = os.path.join(dirpath, fn)
+        dst = os.path.relpath(dirpath, nas_dir)
+        _nas_datas.append((src, dst))
 
 
 a = Analysis(
