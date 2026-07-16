@@ -1,33 +1,20 @@
 @echo off
 
-REM Check for ffmpeg.exe in nas/bin — download if missing
-if not exist nas\bin\ffmpeg.exe (
-    echo [PRE] ffmpeg.exe not found. Downloading portable build...
-    if not exist nas\bin mkdir nas\bin
-    echo Downloading ffmpeg...
-    REM Use PowerShell to download & extract just ffmpeg.exe from gyan.dev's essentials zip
-    powershell -Command ^
-        "$ProgressPreference='SilentlyContinue'; ^
-         Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' ^
-             -OutFile '%TEMP%\ffmpeg-release-essentials.zip'; ^
-         Add-Type -AssemblyName System.IO.Compression.FileSystem; ^
-         $zip = [System.IO.Compression.ZipFile]::OpenRead('%TEMP%\ffmpeg-release-essentials.zip'); ^
-         $entry = $zip.Entries | Where-Object { $_.Name -eq 'ffmpeg.exe' } | Select-Object -First 1; ^
-         if ($entry) { ^
-             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, 'nas\bin\ffmpeg.exe', $true) ^
-         } ^
-         $zip.Dispose(); ^
-         Remove-Item '%TEMP%\ffmpeg-release-essentials.zip'"
-    if not exist nas\bin\ffmpeg.exe (
-        echo [WARN] ffmpeg download failed — thumbnails will need system ffmpeg installed
-    ) else (
-        echo [OK] ffmpeg.exe ready in nas\bin\ (suppressed black window)
-    )
+if not exist nas\bin\mkdir nas\bin 2>nul
+if not exist nas\bin\ffmpeg.exe goto download_ffmpeg
+echo [PRE] ffmpeg.exe already present in nas\bin\
+goto build
+
+:download_ffmpeg
+echo [PRE] Downloading portable ffmpeg.exe for video thumbnails...
+powershell -Command "$p=New-Object System.Net.WebClient; $p.DownloadFile('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip', '%TEMP%\ffmpeg.zip'); $z=[System.IO.Compression.ZipFile]::OpenRead('%TEMP%\ffmpeg.zip'); $e=($z.Entries|Where-Object{$_.Name -eq 'ffmpeg.exe'}|Select-Object -First 1); [System.IO.Compression.ZipFileExtensions]::ExtractToFile($e, 'nas\bin\ffmpeg.exe', $true); $z.Dispose(); del '%TEMP%\ffmpeg.zip'"
+if exist nas\bin\ffmpeg.exe (
+    echo [OK] ffmpeg.exe ready in nas\bin\
 ) else (
-    echo [PRE] ffmpeg.exe already present in nas\bin\
+    echo [WARN] ffmpeg download failed - thumbnails will need system ffmpeg installed
 )
 
-@echo on
+:build
 echo [1/4] Cleaning old builds...
 if exist build rd /s /q build
 if exist dist rd /s /q dist
