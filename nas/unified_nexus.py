@@ -16,6 +16,7 @@ import io
 import threading
 import glob
 import subprocess
+import shutil
 from pathlib import Path
 from functools import wraps
 
@@ -1152,7 +1153,6 @@ def save_document():
         return jsonify({"error": str(e)}), 500
 
 
-@nas_bp.route('/api/thumbnail')
 @nas_bp.route('/api/diag_ffmpeg')
 @require_auth
 def diag_ffmpeg():
@@ -1242,6 +1242,7 @@ def _verify_ffmpeg(path, startupinfo):
         return False
 
 
+@nas_bp.route('/api/thumbnail')
 def get_thumbnail():
     path = request.args.get('path', '')
     full_path = resolve_path(path)
