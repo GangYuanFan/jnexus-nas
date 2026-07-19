@@ -98,8 +98,11 @@
         .file-entry { display: flex; align-items: center; padding: 0.5rem 1rem; border-radius: 10px; cursor: pointer; transition: all 0.15s; gap: 10px; font-size: 13px; }
         .file-entry:hover { background: rgba(255,255,255,0.05); }
         .file-entry .icon { width: 24px; height: 24px; object-fit: contain; }
-        .file-entry .name { flex: 1; font-weight: 500; color: rgba(255,255,255,0.85); }
-        .file-entry .size { color: rgba(255,255,255,0.3); font-size: 12px; }
+        .file-entry .file-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .file-entry .name { font-weight: 500; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-entry .meta-row { display: flex; gap: 8px; font-size: 11px; color: rgba(255,255,255,0.3); }
+        .file-entry .size { color: rgba(255,255,255,0.3); font-size: 12px; flex-shrink: 0; }
+        @media (max-width: 480px) { .file-entry .meta-row { font-size: 10px; } }
         .file-entry .actions { display: flex; gap: 6px; opacity: 1; transition: opacity 0.15s; flex-shrink: 0; }
         @media (hover: hover) { .file-entry .actions { opacity: 0; } .file-entry:hover .actions { opacity: 1; } }
         .file-entry .actions button { background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 14px; }
@@ -163,6 +166,10 @@
         .ctx-item.danger { color: rgba(255,80,80,0.7); }
         .ctx-item.danger:hover { background: rgba(255,80,80,0.08); color: #ff5050; }
         .ctx-divider { height: 1px; background: rgba(255,255,255,0.04); margin: 4px 0; }
+        .ctx-header { padding: 0.6rem 1rem 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.04); margin-bottom: 2px; }
+        .ctx-header .ctx-filename { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ctx-header .ctx-mtime { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 2px; }
+        @media (max-width: 480px) { .ctx-header { padding: 0.8rem 1rem 0.5rem; } .ctx-header .ctx-filename { font-size: 14px; } .ctx-header .ctx-mtime { font-size: 12px; } }
         
         /* Media Player Overlay */
         #media-overlay { display: none; position: fixed; inset: 0; z-index: 4000; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); justify-content: center; align-items: center; }
@@ -626,6 +633,8 @@
 
 <!-- Context Menu -->
 <div id="ctx-menu">
+    <div id="ctx-header" class="ctx-header"></div>
+    <div class="ctx-divider" id="ctx-header-divider"></div>
     <div class="ctx-item" onclick="ctxAction('edit')">📝 Edit</div>
     <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
     <div class="ctx-divider"></div>
@@ -1083,7 +1092,7 @@ function renderFiles(files) {
                 item.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     const encPath = encodeURIComponent(currentPath ? currentPath + '/' + f.name : f.name);
-                    showCtx(e, f.name, encPath, false);
+                    showCtx(e, f.name, encPath, false, f.mtime || 0);
                 });
                 grid.appendChild(item);
             }
@@ -1109,10 +1118,15 @@ function renderFiles(files) {
         entry.innerHTML = `
             <input type="checkbox" class="file-check" data-path="${fpath}" onclick="event.stopPropagation();toggleBatch()" style="margin-right:4px;accent-color:#00f2ff;width:14px;height:14px;cursor:pointer;flex-shrink:0;">
             <img src="${iconUrl}" class="icon" alt="icon">
-            <span class="name">${f.name}</span>
-            <span class="size">${size}</span>
+            <span class="file-info">
+                <span class="name">${f.name}</span>
+                <span class="meta-row">
+                    <span>${f.mtime ? formatMtime(f.mtime) : ''}</span>
+                    <span class="size">${size}</span>
+                </span>
+            </span>
             <span class="actions">
-                <button onclick="event.stopPropagation();showCtx(event, '${f.name}', '${encPath}', ${f.is_dir})">⋮</button>
+                <button onclick="event.stopPropagation();showCtx(event, '${f.name}', '${encPath}', ${f.is_dir}, ${f.mtime || 0})">⋮</button>
             </span>`;
         entry.onclick = () => {
             if (f.is_dir) { loadFiles(fpath); return; }
@@ -1135,9 +1149,15 @@ function setSort(mode) {
     renderFiles(allFiles);
 }
 
-function showCtx(e, name, encPath, isDir) {
-    ctxTarget = { name, encPath, isDir };
+function showCtx(e, name, encPath, isDir, mtime) {
+    ctxTarget = { name, encPath, isDir, mtime };
     const m = document.getElementById('ctx-menu');
+    // Set menu header with file info
+    const header = document.getElementById('ctx-header');
+    if (header) {
+        const dateStr = mtime ? formatMtime(mtime) : '';
+        header.innerHTML = '<div class="ctx-filename">' + escapeHtml(name) + '</div>' + (dateStr ? '<div class="ctx-mtime">📅 ' + dateStr + '</div>' : '');
+    }
     m.style.display = 'block';
     
     let left = e.clientX;
@@ -1849,6 +1869,17 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ====== UTILITY ======
+
+function formatMtime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts * 1000);
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const timeStr = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    if (d.toDateString() === now.toDateString()) return timeStr;
+    if (d.getFullYear() === now.getFullYear()) return (pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + timeStr);
+    return d.getFullYear() + '/' + pad(d.getMonth()+1) + '/' + pad(d.getDate());
+}
 
 function escapeHtml(text) {
     const d = document.createElement('div');
