@@ -4,6 +4,15 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
+# 1.3.0 (2026-07-19) - Cut/Copy/Paste, Batch Delete, File Dates
+# - New: Batch delete button — multi-select files → move to Trash
+# - New: Cut/Copy/Paste — multi-file clipboard with overwrite support
+# - New: Last modified time shown on file entries & context menu
+# - UX: Context menu reorganized — Delete moved up, Cut/Copy added
+# - UX: Context menu enlarged on mobile (wider items, scrollable)
+# - UX: Gallery long-press opens context menu
+# - Fix: Paste to root directory no longer rejected
+#
 # 1.2.0 (2026-07-16) - Batch Share, Share Password Fix, Auto Cleanup
 # - New: Batch share — multi-select files → share as ZIP bundle
 # - Fix: Share password no longer overwritten by NAS master password

@@ -5,8 +5,8 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Bluep
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.2.2'
-RELEASE_DATE = '2026-07-16'
+__version__ = '1.3.0'
+RELEASE_DATE = '2026-07-19'
 import psutil
 import platform
 import time
