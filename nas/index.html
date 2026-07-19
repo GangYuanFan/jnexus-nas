@@ -427,6 +427,9 @@
                 <button id="btn-batch-dl" onclick="batchDownload()" style="display:none;background:rgba(0,242,255,0.08);border-color:rgba(0,242,255,0.15);color:#00f2ff;">📦 Download (<span id="batch-count">0</span>)</button>
                 <button id="btn-batch-share" onclick="shareSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🔗 Share (<span id="share-count">0</span>)</button>
                 <button id="btn-batch-delete" onclick="batchDelete()" style="display:none;background:rgba(255,50,50,0.12);border-color:rgba(255,50,50,0.2);color:#ff5252;">🗑️ Delete (<span id="delete-count">0</span>)</button>
+                <button id="btn-batch-cut" onclick="cutSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">✂️ Cut (<span id="cut-count">0</span>)</button>
+                <button id="btn-batch-copy" onclick="copySelected()" style="display:none;background:rgba(100,200,255,0.08);border-color:rgba(100,200,255,0.15);color:#7accff;">📋 Copy (<span id="copy-count">0</span>)</button>
+                <button id="btn-paste" onclick="pasteFiles()" style="display:none;background:rgba(100,200,100,0.08);border-color:rgba(100,200,100,0.15);color:#6dd6a0;">📌 Paste</button>
 
             <!-- Upload Progress Bar (hidden by default) -->
             <div id="upload-progress-container" class="hidden-upload" style="display:none">
@@ -638,6 +641,9 @@
     <div class="ctx-item" onclick="ctxAction('edit')">📝 Edit</div>
     <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
     <div class="ctx-divider"></div>
+    <div class="ctx-item" onclick="ctxAction('cut')">✂️ Cut</div>
+    <div class="ctx-item" onclick="ctxAction('copy')">📋 Copy</div>
+    <div class="ctx-divider"></div>
     <div class="ctx-item" onclick="ctxAction('download')">⬇️ Download</div>
     <div class="ctx-item" onclick="ctxAction('rename')">✏️ Rename</div>
     <div class="ctx-item" onclick="ctxAction('share')">🔗 Share Link</div>
@@ -645,6 +651,7 @@
 
 
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, isGallery = false, currentEditingPath = '', activeMedia = null;
+let clipboardPaths = [], clipboardOp = ''; // 'cut' or 'copy'
 let cpuChart, memChart; // Chart instances
 
 let ROOT = '';
@@ -969,6 +976,7 @@ async function stopWebDAV() {
 async function loadFiles(path, pushHist = true) {
     closeCtxMenu();
     currentPath = path;
+    updatePasteBtn();
     const grid = document.getElementById('file-grid');
     grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     renderBreadcrumb(path);
@@ -1194,6 +1202,14 @@ function ctxAction(action) {
         if (nn && nn !== name) apiFetch('/nas/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({oldPath:path, newName:nn}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
     } else if (action === 'delete') {
         if (confirm('Move "' + name + '" to Trash?')) apiFetch('/nas/api/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path}) }).then(r=>r.json()).then(r=>{ if(r.success) refresh(); });
+    } else if (action === 'cut') {
+        clipboardPaths = [path];
+        clipboardOp = 'cut';
+        updatePasteBtn();
+    } else if (action === 'copy') {
+        clipboardPaths = [path];
+        clipboardOp = 'copy';
+        updatePasteBtn();
     } else if (action === 'share') {
         showShareDialog(name, path);
     }
@@ -1994,6 +2010,10 @@ function toggleBatch() {
     const shareCnt = document.getElementById('share-count');
     const delBtn = document.getElementById('btn-batch-delete');
     const delCnt = document.getElementById('delete-count');
+    const cutBtn = document.getElementById('btn-batch-cut');
+    const cutCnt = document.getElementById('cut-count');
+    const copyBtn = document.getElementById('btn-batch-copy');
+    const copyCnt = document.getElementById('copy-count');
     if (checks.length > 0) {
         btn.style.display = '';
         btn.innerHTML = (checks.length === 1 ? '⬇️ Download (<span id="batch-count">1</span>)' : '📦 Download (<span id="batch-count">' + checks.length + '</span>)');
@@ -2001,11 +2021,18 @@ function toggleBatch() {
         shareBtn.innerHTML = (checks.length === 1 ? '🔗 Share (<span id="share-count">1</span>)' : '🔗 Share (<span id="share-count">' + checks.length + '</span>)');
         delBtn.style.display = '';
         delBtn.innerHTML = (checks.length === 1 ? '🗑️ Delete (<span id="delete-count">1</span>)' : '🗑️ Delete (<span id="delete-count">' + checks.length + '</span>)');
+        cutBtn.style.display = '';
+        cutBtn.innerHTML = (checks.length === 1 ? '✂️ Cut (<span id="cut-count">1</span>)' : '✂️ Cut (<span id="cut-count">' + checks.length + '</span>)');
+        copyBtn.style.display = '';
+        copyBtn.innerHTML = (checks.length === 1 ? '📋 Copy (<span id="copy-count">1</span>)' : '📋 Copy (<span id="copy-count">' + checks.length + '</span>)');
     } else {
         btn.style.display = 'none';
         shareBtn.style.display = 'none';
         delBtn.style.display = 'none';
+        cutBtn.style.display = 'none';
+        copyBtn.style.display = 'none';
     }
+    updatePasteBtn();
 }
 
 async function batchDownload() {
@@ -2073,6 +2100,70 @@ async function batchDelete() {
         refresh();
     } catch (e) {
         alert('Delete error: ' + e.message);
+    }
+}
+
+// ====== CLIPBOARD (Cut / Copy / Paste) ======
+
+function updatePasteBtn() {
+    const btn = document.getElementById('btn-paste');
+    if (clipboardPaths.length > 0) {
+        btn.style.display = '';
+        btn.textContent = '📌 Paste (' + clipboardPaths.length + (clipboardOp === 'cut' ? ', ✂️' : ', 📋') + ')';
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function cutSelected() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    if (checks.length === 0) return;
+    clipboardPaths = Array.from(checks).map(c => c.getAttribute('data-path'));
+    clipboardOp = 'cut';
+    checks.forEach(c => c.checked = false);
+    toggleBatch();
+    updatePasteBtn();
+}
+
+function copySelected() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    if (checks.length === 0) return;
+    clipboardPaths = Array.from(checks).map(c => c.getAttribute('data-path'));
+    clipboardOp = 'copy';
+    checks.forEach(c => c.checked = false);
+    toggleBatch();
+    updatePasteBtn();
+}
+
+async function pasteFiles() {
+    if (clipboardPaths.length === 0) return;
+    // Normalize destination: empty string = root
+    const targetDir = currentPath || '';
+    const apiPath = clipboardOp === 'cut' ? '/nas/api/move' : '/nas/api/copy';
+    const opLabel = clipboardOp === 'cut' ? 'Moving' : 'Copying';
+    try {
+        const r = await apiFetch(apiPath, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({paths: clipboardPaths, dest: targetDir})
+        });
+        const d = await r.json();
+        if (d.success > 0) {
+            if (clipboardOp === 'cut') {
+                clipboardPaths = [];
+                clipboardOp = '';
+                updatePasteBtn();
+            }
+            refresh();
+            if (d.errors && d.errors.length > 0) {
+                alert(d.success + ' item(s) pasted.\nErrors:\n' + d.errors.join('\n'));
+            }
+        } else {
+            const errMsg = d.errors ? d.errors.join(', ') : (d.error || 'unknown error');
+            alert('Paste failed: ' + errMsg);
+        }
+    } catch (e) {
+        alert(opLabel + ' error: ' + e.message);
     }
 }
 

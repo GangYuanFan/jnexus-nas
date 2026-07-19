@@ -511,6 +511,84 @@ def rename_item():
         return jsonify({"success": True})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
+@nas_bp.route('/api/copy', methods=['POST'])
+@require_auth
+def copy_item():
+    """Copy files from source paths to a destination directory."""
+    data = request.json
+    paths = data.get('paths', [])
+    dest = data.get('dest', '')  # '' = root
+    if not paths:
+        return jsonify({"error": "Missing paths"}), 400
+    if dest is None:
+        return jsonify({"error": "Missing dest"}), 400
+    dest_full = resolve_path(dest)
+    if not dest_full.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+    success = 0
+    errors = []
+    for p in paths:
+        src_full = resolve_path(p)
+        if not src_full.startswith(ROOT_DIR):
+            errors.append(p + ': forbidden')
+            continue
+        if os.path.isdir(src_full):
+            dst = os.path.join(dest_full, os.path.basename(p))
+            try:
+                # Remove destination if exists, then copy
+                if os.path.exists(dst):
+                    shutil.rmtree(dst, ignore_errors=True)
+                shutil.copytree(src_full, dst, dirs_exist_ok=True)
+                success += 1
+            except Exception as e:
+                errors.append(p + ': ' + str(e))
+        else:
+            try:
+                dst_file = os.path.join(dest_full, os.path.basename(p))
+                # Remove destination if exists (overwrite)
+                if os.path.exists(dst_file):
+                    os.remove(dst_file)
+                shutil.copy2(src_full, dest_full)
+                success += 1
+            except Exception as e:
+                errors.append(p + ': ' + str(e))
+    return jsonify({"success": success, "errors": errors})
+
+@nas_bp.route('/api/move', methods=['POST'])
+@require_auth
+def move_item():
+    """Move files from source paths to a destination directory (overwrites existing)."""
+    data = request.json
+    paths = data.get('paths', [])
+    dest = data.get('dest', '')  # '' = root
+    if not paths:
+        return jsonify({"error": "Missing paths"}), 400
+    if dest is None:
+        return jsonify({"error": "Missing dest"}), 400
+    dest_full = resolve_path(dest)
+    if not dest_full.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+    success = 0
+    errors = []
+    for p in paths:
+        src_full = resolve_path(p)
+        if not src_full.startswith(ROOT_DIR):
+            errors.append(p + ': forbidden')
+            continue
+        try:
+            dst_path = os.path.join(dest_full, os.path.basename(p))
+            # Remove destination if exists (overwrite)
+            if os.path.exists(dst_path):
+                if os.path.isdir(dst_path):
+                    shutil.rmtree(dst_path, ignore_errors=True)
+                else:
+                    os.remove(dst_path)
+            shutil.move(src_full, dest_full)
+            success += 1
+        except Exception as e:
+            errors.append(p + ': ' + str(e))
+    return jsonify({"success": success, "errors": errors})
+
 @nas_bp.route('/api/download')
 @require_auth
 def download_file():
