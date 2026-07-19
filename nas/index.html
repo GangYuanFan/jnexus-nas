@@ -431,6 +431,12 @@
                 <button id="btn-batch-copy" onclick="copySelected()" style="display:none;background:rgba(100,200,255,0.08);border-color:rgba(100,200,255,0.15);color:#7accff;">📋 Copy (<span id="copy-count">0</span>)</button>
                 <button id="btn-paste" onclick="pasteFiles()" style="display:none;background:rgba(100,200,100,0.08);border-color:rgba(100,200,100,0.15);color:#6dd6a0;">📌 Paste</button>
 
+            <!-- Background Upload Status Banner -->
+            <div id="bg-upload-banner" style="display:none; padding: 8px 14px; background: rgba(0,242,255,0.06); border: 1px solid rgba(0,242,255,0.1); border-radius: 10px; margin-bottom: 10px; font-size: 13px; color: #00f2ff; align-items: center; gap: 8px;">
+              <span id="bg-upload-text">⏳ Background upload in progress...</span>
+              <button onclick="dismissBanner()" style="margin-left:auto; background:none; border:none; color:rgba(255,255,255,0.3); cursor:pointer;">✕</button>
+            </div>
+
             <!-- Upload Progress Bar (hidden by default) -->
             <div id="upload-progress-container" class="hidden-upload" style="display:none">
                 <div class="upload-progress-inner">
@@ -763,6 +769,11 @@ document.getElementById('access-key').addEventListener('keypress', e => { if(e.k
 
 // Auto-login: check localStorage for valid session (5-minute TTL)
 tryAutoLogin();
+
+// Resume any pending background uploads on page load
+if ('serviceWorker' in navigator) {
+  setTimeout(() => resumePendingUploads(), 1000);
+}
 
 // Close context menu when clicking anywhere else
 function closeCtxMenu() {
@@ -1272,75 +1283,246 @@ async function createFolder() {
     if (d.success) refresh(); else alert(d.error);
 }
 
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+
 async function handleUpload(input, files = null) {
-    const targetFiles = files || (input.files ? Array.from(input.files) : []);
-    if (!targetFiles.length) return;
-    
-    const container = document.getElementById('upload-progress-container');
-    const filenameEl = document.getElementById('upload-filename');
-    const percentEl = document.getElementById('upload-percent');
-    const barEl = document.getElementById('upload-progress-bar');
-    
-    let uploaded = 0;
-    const total = targetFiles.length;
-    
+  const targetFiles = files || (input.files ? Array.from(input.files) : []);
+  if (!targetFiles.length) return;
+
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller) {
+    // Fallback: no SW available - use legacy XHR upload
+    return legacyUpload(input, files);
+  }
+
+  const container = document.getElementById('upload-progress-container');
+  const filenameEl = document.getElementById('upload-filename');
+  const percentEl = document.getElementById('upload-percent');
+  const barEl = document.getElementById('upload-progress-bar');
+  container.style.display = 'block';
+
+  for (let i = 0; i < targetFiles.length; i++) {
+    const file = targetFiles[i];
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+    filenameEl.textContent = file.name + (targetFiles.length > 1 ? ` (${i + 1}/${targetFiles.length})` : '');
+    percentEl.textContent = `0% (0/${totalChunks} chunks)`;
+    barEl.style.width = '0%';
+
     try {
-        for (let i = 0; i < total; i++) {
-            const f = targetFiles[i];
-            filenameEl.textContent = f.name + (total > 1 ? ` (${i + 1}/${total})` : '');
-            container.style.display = 'block';
-            
-            await new Promise((resolve, reject) => {
-                const fd = new FormData();
-                fd.append('file', f);
-                fd.append('path', currentPath);
-                
-                const xhr = new XMLHttpRequest();
-                xhr.upload.onprogress = function(e) {
-                    if (e.lengthComputable) {
-                        const pct = Math.round((e.loaded / e.total) * 100);
-                        percentEl.textContent = pct + '%';
-                        barEl.style.width = pct + '%';
-                    }
-                };
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        percentEl.textContent = '100%';
-                        barEl.style.width = '100%';
-                        uploaded++;
-                        resolve();
-                    } else {
-                        reject(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
-                    }
-                };
-                xhr.onerror = function() { reject(new Error('Network error')); };
-                xhr.open('POST', '/nas/api/upload?password=' + encodeURIComponent(userPassword), true);
-                xhr.send(fd);
-            });
+      // 1. Initialize upload session
+      const initResp = await apiFetch('/nas/api/upload/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          path: currentPath,
+          total_size: file.size,
+          mime: file.type || 'application/octet-stream',
+          total_chunks: totalChunks
+        })
+      });
+      const initData = await initResp.json();
+      if (!initData.success) throw new Error(initData.error || 'Init failed');
+      const uploadId = initData.upload_id;
+
+      // 2. Save to IndexedDB
+      await saveUploadToIDB({
+        upload_id: uploadId,
+        filename: file.name,
+        path: currentPath,
+        total_chunks: totalChunks,
+        total_size: file.size,
+        mime: file.type,
+        uploaded_chunks: [],
+        status: 'uploading',
+        created_at: Date.now()
+      });
+
+      // 3. Upload chunks via SW
+      let uploadedChunks = 0;
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+        const start = chunkIdx * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunkBlob = file.slice(start, end);
+
+        // Check server for already-received chunks (resume support)
+        if (chunkIdx === 0) {
+          const statusResp = await apiFetch(`/nas/api/upload/status?upload_id=${uploadId}`);
+          const statusData = await statusResp.json();
+          if (statusData.success && statusData.received_chunks) {
+            uploadedChunks = statusData.received_chunks.length;
+            const record = await getUploadFromIDB(uploadId);
+            if (record) {
+              record.uploaded_chunks = statusData.received_chunks;
+              await saveUploadToIDB(record);
+            }
+          }
         }
-        
-        // All done - hide progress after brief pause
-        setTimeout(() => {
-            container.style.display = 'none';
-            percentEl.textContent = '0%';
-            barEl.style.width = '0%';
-            filenameEl.textContent = 'Uploading...';
-        }, 800);
-        
-        refresh();
-    } catch (e) {
-        console.error('Upload error:', e);
-        filenameEl.textContent = '❌ ' + e.message;
-        percentEl.textContent = 'FAIL';
-        barEl.style.width = '0%';
-        barEl.style.background = 'linear-gradient(90deg, #ff4444, #ff6b6b)';
-        setTimeout(() => {
-            container.style.display = 'none';
-            barEl.style.background = 'linear-gradient(90deg, #4ade80, #3b82f6)';
-            filenameEl.textContent = 'Uploading...';
-            percentEl.textContent = '0%';
-        }, 3000);
+
+        // Skip already-uploaded chunks
+        const record = await getUploadFromIDB(uploadId);
+        if (record && record.uploaded_chunks && record.uploaded_chunks.includes(chunkIdx)) {
+          continue;
+        }
+
+        // Send chunk to SW via MessageChannel
+        await new Promise((resolve, reject) => {
+          const messageChannel = new MessageChannel();
+          messageChannel.port1.onmessage = (e) => {
+            const result = e.data;
+            if (result.type === 'chunk_result') {
+              if (result.success) {
+                uploadedChunks = Math.max(uploadedChunks, result.chunk_index + 1);
+                const pct = Math.round((uploadedChunks / totalChunks) * 100);
+                percentEl.textContent = `${pct}% (${uploadedChunks}/${totalChunks} chunks)`;
+                barEl.style.width = pct + '%';
+                resolve();
+              } else {
+                reject(new Error(result.error || 'Chunk upload failed'));
+              }
+            }
+          };
+
+          sw.controller.postMessage({
+            type: 'upload_chunk',
+            upload_id: uploadId,
+            chunk_index: chunkIdx,
+            chunk_blob: chunkBlob,
+            filename: file.name,
+            path: currentPath,
+            total_chunks: totalChunks,
+            total_size: file.size,
+            mime: file.type,
+            password: userPassword
+          }, [messageChannel.port2]);
+        });
+
+        // Update IDB progress
+        const rec = await getUploadFromIDB(uploadId);
+        if (rec) {
+          if (!rec.uploaded_chunks) rec.uploaded_chunks = [];
+          if (!rec.uploaded_chunks.includes(chunkIdx)) {
+            rec.uploaded_chunks.push(chunkIdx);
+          }
+          await saveUploadToIDB(rec);
+        }
+      }
+
+      // 4. All chunks done - call complete
+      const completeResp = await apiFetch('/nas/api/upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upload_id: uploadId, path: currentPath })
+      });
+      const completeData = await completeResp.json();
+      if (!completeData.success) throw new Error(completeData.error || 'Complete failed');
+
+      // 5. Clean up IDB
+      await removeUploadFromIDB(uploadId);
+
+      // 6. Notify SW to clear
+      if (sw.controller) {
+        sw.controller.postMessage({ type: 'clear_upload', upload_id: uploadId });
+      }
+
+    } catch (err) {
+      console.error('Upload chunk error:', err);
+      filenameEl.textContent = '❌ ' + file.name + ': ' + err.message;
+      percentEl.textContent = 'FAIL';
+      barEl.style.width = '0%';
+      barEl.style.background = 'linear-gradient(90deg, #ff4444, #ff6b6b)';
+      // Keep in IDB for later resume
+      setTimeout(() => {
+        container.style.display = 'none';
+        barEl.style.background = 'linear-gradient(90deg, #4ade80, #3b82f6)';
+        filenameEl.textContent = 'Uploading...';
+        percentEl.textContent = '0%';
+      }, 3000);
+      return;
     }
+  }
+
+  // All done
+  percentEl.textContent = '100%';
+  barEl.style.width = '100%';
+  setTimeout(() => {
+    container.style.display = 'none';
+    percentEl.textContent = '0%';
+    barEl.style.width = '0%';
+    filenameEl.textContent = 'Uploading...';
+  }, 800);
+  refresh();
+}
+
+// Legacy XHR upload fallback for when SW is not available
+async function legacyUpload(input, files = null) {
+  const targetFiles = files || (input.files ? Array.from(input.files) : []);
+  if (!targetFiles.length) return;
+
+  const container = document.getElementById('upload-progress-container');
+  const filenameEl = document.getElementById('upload-filename');
+  const percentEl = document.getElementById('upload-percent');
+  const barEl = document.getElementById('upload-progress-bar');
+
+  let uploaded = 0;
+  const total = targetFiles.length;
+
+  try {
+    for (let i = 0; i < total; i++) {
+      const f = targetFiles[i];
+      filenameEl.textContent = f.name + (total > 1 ? ` (${i + 1}/${total})` : '');
+      container.style.display = 'block';
+
+      await new Promise((resolve, reject) => {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('path', currentPath);
+
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = function(e) {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            percentEl.textContent = pct + '%';
+            barEl.style.width = pct + '%';
+          }
+        };
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            percentEl.textContent = '100%';
+            barEl.style.width = '100%';
+            uploaded++;
+            resolve();
+          } else {
+            reject(new Error('HTTP ' + xhr.status + ': ' + xhr.statusText));
+          }
+        };
+        xhr.onerror = function() { reject(new Error('Network error')); };
+        xhr.open('POST', '/nas/api/upload?password=' + encodeURIComponent(userPassword), true);
+        xhr.send(fd);
+      });
+    }
+
+    setTimeout(() => {
+      container.style.display = 'none';
+      percentEl.textContent = '0%';
+      barEl.style.width = '0%';
+      filenameEl.textContent = 'Uploading...';
+    }, 800);
+    refresh();
+  } catch (e) {
+    console.error('Upload error:', e);
+    filenameEl.textContent = '❌ ' + e.message;
+    percentEl.textContent = 'FAIL';
+    barEl.style.width = '0%';
+    barEl.style.background = 'linear-gradient(90deg, #ff4444, #ff6b6b)';
+    setTimeout(() => {
+      container.style.display = 'none';
+      barEl.style.background = 'linear-gradient(90deg, #4ade80, #3b82f6)';
+      filenameEl.textContent = 'Uploading...';
+      percentEl.textContent = '0%';
+    }, 3000);
+  }
 }
 function isEditable(name) {
     return ['txt','py','md','json','html','css','js','yml','yaml','log','sh'].includes(name.split('.').pop().toLowerCase());
@@ -2266,6 +2448,215 @@ async function trashEmpty() {
     } catch (e) {
         alert('Empty trash error: ' + e.message);
     }
+}
+
+// ====== Chunked Upload via Service Worker ======
+
+// --- IndexedDB Helper ---
+const DB_NAME = 'JNAS_Uploads';
+const DB_VERSION = 1;
+const STORE_NAME = 'uploads';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'upload_id' });
+        store.createIndex('status', 'status', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveUploadToIDB(data) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(data);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function getUploadFromIDB(uploadId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(uploadId);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function listPendingUploadsFromIDB() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const index = tx.objectStore(STORE_NAME).index('status');
+    const req = index.openCursor(IDBKeyRange.bound('pending', 'uploading'));
+    const results = [];
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function updateUploadStatusInIDB(uploadId, status) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.get(uploadId);
+    req.onsuccess = () => {
+      const data = req.result;
+      if (data) {
+        data.status = status;
+        store.put(data);
+      }
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function removeUploadFromIDB(uploadId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(uploadId);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// --- Background Upload Banner ---
+function showBackgroundUploadBanner(text) {
+  const banner = document.getElementById('bg-upload-banner');
+  const textEl = document.getElementById('bg-upload-text');
+  if (textEl) textEl.textContent = text;
+  banner.style.display = 'flex';
+}
+
+function hideBackgroundUploadBanner() {
+  document.getElementById('bg-upload-banner').style.display = 'none';
+}
+
+function dismissBanner() {
+  document.getElementById('bg-upload-banner').style.display = 'none';
+}
+
+// --- Resume Pending Uploads on Page Load ---
+async function resumePendingUploads() {
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller) return;
+
+  const pendingFromIDB = await listPendingUploadsFromIDB();
+  if (pendingFromIDB.length === 0) return;
+
+  showBackgroundUploadBanner(`🔄 Resuming ${pendingFromIDB.length} upload(s)...`);
+
+  for (const upload of pendingFromIDB) {
+    try {
+      const statusResp = await apiFetch(`/nas/api/upload/status?upload_id=${upload.upload_id}`);
+      const statusData = await statusResp.json();
+
+      if (statusData.success) {
+        if (statusData.is_complete) {
+          const compResp = await apiFetch('/nas/api/upload/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ upload_id: upload.upload_id, path: upload.path })
+          });
+          const compData = await compResp.json();
+          if (compData.success) {
+            await removeUploadFromIDB(upload.upload_id);
+          }
+        } else {
+          upload.uploaded_chunks = statusData.received_chunks;
+          await saveUploadToIDB(upload);
+        }
+      }
+    } catch (e) {
+      console.error('Resume check error:', e);
+      await removeUploadFromIDB(upload.upload_id);
+    }
+  }
+
+  hideBackgroundUploadBanner();
+  refresh();
+}
+
+// --- Page Visibility Listener ---
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    const sw = navigator.serviceWorker;
+    if (!sw || !sw.controller) return;
+
+    const pending = await listPendingUploadsFromIDB();
+    if (pending.length > 0) {
+      showBackgroundUploadBanner(pending.length + ' upload(s) completed in background');
+      refresh();
+      for (const p of pending) {
+        try {
+          const statusResp = await apiFetch(`/nas/api/upload/status?upload_id=${p.upload_id}`);
+          const statusData = await statusResp.json();
+          if (statusData.success && statusData.is_complete) {
+            const completeResp = await apiFetch('/nas/api/upload/complete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ upload_id: p.upload_id, path: p.path })
+            });
+            const completeData = await completeResp.json();
+            if (completeData.success) {
+              await removeUploadFromIDB(p.upload_id);
+              if (sw.controller) {
+                sw.controller.postMessage({ type: 'clear_upload', upload_id: p.upload_id });
+              }
+            }
+          } else if (statusData.success && statusData.received_chunks) {
+            const record = await getUploadFromIDB(p.upload_id);
+            if (record) {
+              record.uploaded_chunks = statusData.received_chunks;
+              await saveUploadToIDB(record);
+            }
+          }
+        } catch (e) {
+          console.error('Visibility resume error:', e);
+        }
+      }
+    }
+  }
+});
+
+// --- SW Message Listener (receives events from SW) ---
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const msg = event.data;
+    if (!msg || !msg.type) return;
+
+    switch (msg.type) {
+      case 'chunk_result':
+        console.log(`Chunk ${msg.chunk_index} ${msg.success ? 'OK' : 'FAIL'}: ${msg.progress || ''}%`);
+        break;
+      case 'upload_complete':
+        console.log(`Upload complete: ${msg.filename}`);
+        break;
+      case 'pending_list':
+        console.log('Pending uploads:', msg.uploads);
+        break;
+    }
+  });
 }
 
 </script>

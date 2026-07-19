@@ -5,7 +5,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Bluep
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.3.0'
+__version__ = '1.4.0'
 RELEASE_DATE = '2026-07-19'
 import psutil
 import platform
@@ -17,6 +17,7 @@ import threading
 import glob
 import subprocess
 import shutil
+import uuid
 from pathlib import Path
 from functools import wraps
 
@@ -51,6 +52,45 @@ def init_app(root, password, port):
 # --- TRASH CONFIG ---
 TRASH_DIR = os.path.join(ROOT_DIR, '.trash')
 TRASH_META_FILE = os.path.join(TRASH_DIR, '.trash_meta.json')
+
+# --- CHUNKED UPLOAD CONFIG ---
+UPLOAD_TEMP_DIR = os.path.join(ROOT_DIR, '.nas_uploads')
+
+
+def cleanup_stale_uploads():
+    """Remove upload temp dirs older than 24 hours."""
+    if not os.path.isdir(UPLOAD_TEMP_DIR):
+        return
+    now = time.time()
+    for entry in os.listdir(UPLOAD_TEMP_DIR):
+        upload_dir = os.path.join(UPLOAD_TEMP_DIR, entry)
+        if not os.path.isdir(upload_dir):
+            continue
+        meta_path = os.path.join(upload_dir, 'metadata.json')
+        stale = False
+        if os.path.isfile(meta_path):
+            try:
+                with open(meta_path, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                created = meta.get('created_at', 0)
+                if now - created > 86400:
+                    stale = True
+            except Exception:
+                stale = True
+        else:
+            # No metadata — check directory mtime as fallback
+            try:
+                dir_mtime = os.path.getmtime(upload_dir)
+                if now - dir_mtime > 86400:
+                    stale = True
+            except Exception:
+                stale = True
+        if stale:
+            try:
+                shutil.rmtree(upload_dir)
+                logger.info(f'Cleaned stale upload: {upload_dir}')
+            except Exception as e:
+                logger.warning(f'Failed to clean stale upload {upload_dir}: {e}')
 
 def get_trash_meta():
     """Load trash metadata JSON."""
@@ -318,6 +358,246 @@ def upload_file():
         file.save(full_path)
         return jsonify({"success": True, "saved_path": full_path})
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+
+# ====== CHUNKED UPLOAD API ======
+
+
+def _resolve_upload_dir(upload_id):
+    """Return the temp directory for a given upload_id, or None if invalid."""
+    # Security: prevent path traversal in upload_id
+    if not upload_id or '/' in upload_id or '..' in upload_id:
+        return None
+    return os.path.join(UPLOAD_TEMP_DIR, upload_id)
+
+
+@nas_bp.route('/api/upload/init', methods=['POST'])
+@require_auth
+def upload_init():
+    """Initialize a chunked upload session."""
+    cleanup_stale_uploads()
+
+    data = request.json
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    filename = data.get('filename')
+    path = data.get('path', '')
+    total_size = data.get('total_size')
+    mime = data.get('mime', 'application/octet-stream')
+    total_chunks = data.get('total_chunks')
+
+    if not filename or total_chunks is None or total_size is None:
+        return jsonify({"error": "Missing required fields: filename, total_size, total_chunks"}), 400
+
+    try:
+        total_size = int(total_size)
+        total_chunks = int(total_chunks)
+    except (ValueError, TypeError):
+        return jsonify({"error": "total_size and total_chunks must be integers"}), 400
+
+    upload_id = uuid.uuid4().hex[:12]
+    upload_dir = _resolve_upload_dir(upload_id)
+    if upload_dir is None:
+        return jsonify({"error": "Invalid upload_id"}), 400
+
+    os.makedirs(upload_dir, exist_ok=True)
+
+    now = time.time()
+    metadata = {
+        'upload_id': upload_id,
+        'filename': filename,
+        'path': path,
+        'total_size': total_size,
+        'mime': mime,
+        'total_chunks': total_chunks,
+        'created_at': now,
+        'status': 'active'
+    }
+
+    meta_path = os.path.join(upload_dir, 'metadata.json')
+    try:
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        shutil.rmtree(upload_dir, ignore_errors=True)
+        return jsonify({"error": f"Failed to write metadata: {str(e)}"}), 500
+
+    logger.info(f'Upload session initialized: {upload_id} → {filename}')
+    return jsonify({"success": True, "upload_id": upload_id})
+
+
+@nas_bp.route('/api/upload/chunk', methods=['POST'])
+@require_auth
+def upload_chunk():
+    """Upload a single chunk for a chunked upload session."""
+    upload_id = request.form.get('upload_id')
+    chunk_index = request.form.get('chunk_index')
+    file = request.files.get('file')
+
+    if not upload_id or chunk_index is None or not file:
+        return jsonify({"error": "Missing required fields: upload_id, chunk_index, file"}), 400
+
+    upload_dir = _resolve_upload_dir(upload_id)
+    if upload_dir is None or not os.path.isdir(upload_dir):
+        return jsonify({"error": "Invalid or expired upload_id"}), 404
+
+    # Verify upload is still active
+    meta_path = os.path.join(upload_dir, 'metadata.json')
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+    except Exception:
+        return jsonify({"error": "Upload session metadata not found"}), 404
+
+    if metadata.get('status') != 'active':
+        return jsonify({"error": f"Upload session is {metadata.get('status', 'unknown')}"}), 400
+
+    try:
+        chunk_index = int(chunk_index)
+    except (ValueError, TypeError):
+        return jsonify({"error": "chunk_index must be an integer"}), 400
+
+    total_chunks = metadata.get('total_chunks', 0)
+    if chunk_index < 0 or chunk_index >= total_chunks:
+        return jsonify({"error": f"chunk_index out of range (0-{total_chunks - 1})"}), 400
+
+    chunk_path = os.path.join(upload_dir, f'chunk_{chunk_index}')
+
+    # If chunk already exists, return 200 with already_exists flag
+    if os.path.isfile(chunk_path):
+        return jsonify({"success": True, "chunk_index": chunk_index, "already_exists": True})
+
+    try:
+        file.save(chunk_path)
+        logger.info(f'Chunk {chunk_index}/{total_chunks} saved for upload {upload_id}')
+        return jsonify({"success": True, "chunk_index": chunk_index})
+    except Exception as e:
+        return jsonify({"error": f"Failed to save chunk: {str(e)}"}), 500
+
+
+@nas_bp.route('/api/upload/complete', methods=['POST'])
+@require_auth
+def upload_complete():
+    """Complete a chunked upload by merging all chunks into the final file."""
+    data = request.json
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    upload_id = data.get('upload_id')
+    custom_path = data.get('path')  # optional override
+
+    if not upload_id:
+        return jsonify({"error": "Missing upload_id"}), 400
+
+    upload_dir = _resolve_upload_dir(upload_id)
+    if upload_dir is None or not os.path.isdir(upload_dir):
+        return jsonify({"error": "Invalid or expired upload_id"}), 404
+
+    # Load metadata
+    meta_path = os.path.join(upload_dir, 'metadata.json')
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+    except Exception:
+        return jsonify({"error": "Upload session metadata not found"}), 404
+
+    if metadata.get('status') != 'active':
+        return jsonify({"error": f"Upload session is {metadata.get('status', 'unknown')}"}), 400
+
+    filename = metadata['filename']
+    total_chunks = metadata['total_chunks']
+
+    # Verify all chunks are present
+    missing = []
+    for i in range(total_chunks):
+        chunk_path = os.path.join(upload_dir, f'chunk_{i}')
+        if not os.path.isfile(chunk_path):
+            missing.append(i)
+
+    if missing:
+        return jsonify({"error": f"Missing chunk(s): {', '.join(str(m) for m in missing)}", "missing_chunks": missing}), 400
+
+    # Determine target directory
+    target_dir = custom_path if custom_path else metadata.get('path', '')
+    full_dir = resolve_path(target_dir)
+    if not full_dir.startswith(ROOT_DIR):
+        return jsonify({"error": "Forbidden"}), 403
+
+    # Build final path with duplicate handling (same pattern as /api/upload)
+    name, ext = os.path.splitext(filename)
+    full_path = os.path.join(full_dir, filename)
+    counter = 1
+    while os.path.exists(full_path):
+        new_filename = f"{name}_{counter}{ext}"
+        full_path = os.path.join(full_dir, new_filename)
+        counter += 1
+
+    try:
+        # Merge all chunks into final file
+        with open(full_path, 'wb') as outfile:
+            for i in range(total_chunks):
+                chunk_path = os.path.join(upload_dir, f'chunk_{i}')
+                with open(chunk_path, 'rb') as infile:
+                    shutil.copyfileobj(infile, outfile)
+
+        logger.info(f'Upload complete: {upload_id} → {full_path}')
+
+        # Clean up temp directory
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
+        return jsonify({"success": True, "saved_path": full_path})
+
+    except Exception as e:
+        logger.error(f'Upload merge failed for {upload_id}: {e}')
+        return jsonify({"error": f"Failed to merge chunks: {str(e)}"}), 500
+
+
+@nas_bp.route('/api/upload/status', methods=['GET'])
+@require_auth
+def upload_status():
+    """Query the progress of a chunked upload session."""
+    upload_id = request.args.get('upload_id')
+    if not upload_id:
+        return jsonify({"error": "Missing upload_id query parameter"}), 400
+
+    upload_dir = _resolve_upload_dir(upload_id)
+    if upload_dir is None or not os.path.isdir(upload_dir):
+        return jsonify({"error": "Upload session not found"}), 404
+
+    meta_path = os.path.join(upload_dir, 'metadata.json')
+    if not os.path.isfile(meta_path):
+        return jsonify({"error": "Upload session metadata not found"}), 404
+
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+    except Exception:
+        return jsonify({"error": "Failed to read metadata"}), 500
+
+    # Scan received chunks by looking at chunk_* files
+    received_chunks = []
+    if os.path.isdir(upload_dir):
+        for entry in os.listdir(upload_dir):
+            if entry.startswith('chunk_'):
+                try:
+                    idx = int(entry.split('_', 1)[1])
+                    received_chunks.append(idx)
+                except (ValueError, IndexError):
+                    pass
+
+    received_chunks.sort()
+    total_chunks = metadata.get('total_chunks', 0)
+    is_complete = len(received_chunks) == total_chunks and total_chunks > 0
+
+    return jsonify({
+        "success": True,
+        "upload_id": upload_id,
+        "received_chunks": received_chunks,
+        "total_chunks": total_chunks,
+        "is_complete": is_complete,
+        "filename": metadata.get('filename', '')
+    })
 
 @nas_bp.route('/api/delete', methods=['POST'])
 @require_auth
