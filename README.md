@@ -1,6 +1,6 @@
 # J.NAS — Network Attached Storage System
 
-**Version 1.2.2** | A lightweight, browser-based NAS management tool with a desktop GUI controller.
+**Version 1.3.0** | A lightweight, browser-based NAS management tool with a desktop GUI controller.
 
 ![Dashboard Screenshot](https://img.shields.io/badge/status-stable-brightgreen)
 
