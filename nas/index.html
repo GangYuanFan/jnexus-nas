@@ -100,8 +100,8 @@
         .file-entry .icon { width: 24px; height: 24px; object-fit: contain; }
         .file-entry .name { flex: 1; font-weight: 500; color: rgba(255,255,255,0.85); }
         .file-entry .size { color: rgba(255,255,255,0.3); font-size: 12px; }
-        .file-entry .actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.15s; }
-        .file-entry:hover .actions { opacity: 1; }
+        .file-entry .actions { display: flex; gap: 6px; opacity: 1; transition: opacity 0.15s; flex-shrink: 0; }
+        @media (hover: hover) { .file-entry .actions { opacity: 0; } .file-entry:hover .actions { opacity: 1; } }
         .file-entry .actions button { background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 14px; }
         .file-entry .actions button:hover { background: rgba(255,255,255,0.08); color: #fff; }
         
@@ -155,8 +155,10 @@
         .trash-empty-msg .big-icon { font-size: 48px; margin-bottom: 12px; }
         
         /* Context Menu */
-        #ctx-menu { position: fixed; z-index: 200; background: rgba(18,18,30,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; width: 160px; display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.6); overflow: hidden; }
-        .ctx-item { padding: 0.65rem 1rem; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+        #ctx-menu { position: fixed; z-index: 9999; background: rgba(18,18,30,0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; width: 170px; display: none; box-shadow: 0 8px 32px rgba(0,0,0,0.6); overflow-y: auto; max-height: 80vh; }
+        @media (max-width: 480px) { #ctx-menu { width: 190px; font-size: 15px; } }
+        .ctx-item { padding: 0.8rem 1rem; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+        @media (max-width: 480px) { .ctx-item { padding: 0.9rem 1rem; font-size: 15px; } }
         .ctx-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
         .ctx-item.danger { color: rgba(255,80,80,0.7); }
         .ctx-item.danger:hover { background: rgba(255,80,80,0.08); color: #ff5050; }
@@ -417,6 +419,7 @@
                 <button id="btn-gallery" onclick="toggleGallery()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🖼️ Gallery</button>
                 <button id="btn-batch-dl" onclick="batchDownload()" style="display:none;background:rgba(0,242,255,0.08);border-color:rgba(0,242,255,0.15);color:#00f2ff;">📦 Download (<span id="batch-count">0</span>)</button>
                 <button id="btn-batch-share" onclick="shareSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🔗 Share (<span id="share-count">0</span>)</button>
+                <button id="btn-batch-delete" onclick="batchDelete()" style="display:none;background:rgba(255,50,50,0.12);border-color:rgba(255,50,50,0.2);color:#ff5252;">🗑️ Delete (<span id="delete-count">0</span>)</button>
 
             <!-- Upload Progress Bar (hidden by default) -->
             <div id="upload-progress-container" class="hidden-upload" style="display:none">
@@ -624,11 +627,11 @@
 <!-- Context Menu -->
 <div id="ctx-menu">
     <div class="ctx-item" onclick="ctxAction('edit')">📝 Edit</div>
+    <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
+    <div class="ctx-divider"></div>
     <div class="ctx-item" onclick="ctxAction('download')">⬇️ Download</div>
     <div class="ctx-item" onclick="ctxAction('rename')">✏️ Rename</div>
     <div class="ctx-item" onclick="ctxAction('share')">🔗 Share Link</div>
-    <div class="ctx-divider"></div>
-    <div class="ctx-item danger" onclick="ctxAction('delete')">🗑️ Delete</div>
 </div>
 
 
@@ -745,8 +748,15 @@ document.getElementById('access-key').addEventListener('keypress', e => { if(e.k
 // Auto-login: check localStorage for valid session (5-minute TTL)
 tryAutoLogin();
 
-window.addEventListener('click', e => {
+// Close context menu when clicking anywhere else
+function closeCtxMenu() {
     document.getElementById('ctx-menu').style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('ctx-menu');
+    if (menu.style.display === 'block' && !e.target.closest('#ctx-menu') && !e.target.closest('.file-entry .actions')) {
+        closeCtxMenu();
+    }
 });
 
 function initCharts() {
@@ -948,6 +958,7 @@ async function stopWebDAV() {
 }
 
 async function loadFiles(path, pushHist = true) {
+    closeCtxMenu();
     currentPath = path;
     const grid = document.getElementById('file-grid');
     grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -1064,10 +1075,16 @@ function renderFiles(files) {
                 const item = document.createElement('div');
                 item.className = 'gallery-item';
                 item.innerHTML = `<img src="${thumbUrl}" alt="${f.name}" loading="lazy">${isVid ? '<div class="gallery-play-icon">▶</div>' : ''}<div class="gallery-caption">${f.name}</div>`;
-                item.onclick = () => {
+                item.onclick = (e) => {
                     const fullPath = currentPath ? currentPath + '/' + f.name : f.name;
                     openMediaPlayer(fullPath, isVid ? 'video' : 'image');
                 };
+                // Gallery items: long press for context menu
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const encPath = encodeURIComponent(currentPath ? currentPath + '/' + f.name : f.name);
+                    showCtx(e, f.name, encPath, false);
+                });
                 grid.appendChild(item);
             }
             return;
@@ -1095,7 +1112,6 @@ function renderFiles(files) {
             <span class="name">${f.name}</span>
             <span class="size">${size}</span>
             <span class="actions">
-                ${f.is_dir ? '' : `<button onclick="event.stopPropagation();download('${encPath}')">⬇️</button>`}
                 <button onclick="event.stopPropagation();showCtx(event, '${f.name}', '${encPath}', ${f.is_dir})">⋮</button>
             </span>`;
         entry.onclick = () => {
@@ -1124,23 +1140,18 @@ function showCtx(e, name, encPath, isDir) {
     const m = document.getElementById('ctx-menu');
     m.style.display = 'block';
     
-    // Position menu with viewport boundary detection
     let left = e.clientX;
     let top = e.clientY;
-    const menuW = 160;
-    const menuH = m.offsetHeight || 220;
     
-    // Flip left if overflowing right edge
-    if (left + menuW > window.innerWidth) {
-        left = window.innerWidth - menuW - 8;
-    }
-    // Flip top if overflowing bottom edge
-    if (top + menuH > window.innerHeight) {
-        top = window.innerHeight - menuH - 8;
-    }
-    
-    m.style.left = Math.max(4, left) + 'px';
-    m.style.top = Math.max(4, top) + 'px';
+    // Wait for render to get real dimensions, then adjust position
+    requestAnimationFrame(() => {
+        const menuW = m.offsetWidth;
+        const menuH = m.offsetHeight;
+        if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 8;
+        if (top + menuH > window.innerHeight) top = window.innerHeight - menuH - 8;
+        m.style.left = Math.max(4, left) + 'px';
+        m.style.top = Math.max(4, top) + 'px';
+    });
 }
 
 function ctxAction(action) {
@@ -1950,14 +1961,19 @@ function toggleBatch() {
     const cnt = document.getElementById('batch-count');
     const shareBtn = document.getElementById('btn-batch-share');
     const shareCnt = document.getElementById('share-count');
+    const delBtn = document.getElementById('btn-batch-delete');
+    const delCnt = document.getElementById('delete-count');
     if (checks.length > 0) {
         btn.style.display = '';
         btn.innerHTML = (checks.length === 1 ? '⬇️ Download (<span id="batch-count">1</span>)' : '📦 Download (<span id="batch-count">' + checks.length + '</span>)');
         shareBtn.style.display = '';
         shareBtn.innerHTML = (checks.length === 1 ? '🔗 Share (<span id="share-count">1</span>)' : '🔗 Share (<span id="share-count">' + checks.length + '</span>)');
+        delBtn.style.display = '';
+        delBtn.innerHTML = (checks.length === 1 ? '🗑️ Delete (<span id="delete-count">1</span>)' : '🗑️ Delete (<span id="delete-count">' + checks.length + '</span>)');
     } else {
         btn.style.display = 'none';
         shareBtn.style.display = 'none';
+        delBtn.style.display = 'none';
     }
 }
 
@@ -2001,6 +2017,31 @@ async function batchDownload() {
         toggleBatch();
     } catch (e) {
         alert('Download error: ' + e.message);
+    }
+}
+
+async function batchDelete() {
+    const checks = document.querySelectorAll('.file-check:checked');
+    if (checks.length === 0) return;
+    const paths = Array.from(checks).map(c => c.getAttribute('data-path'));
+    const names = paths.map(p => p.split('/').pop()).join(', ');
+    if (!confirm('Move ' + checks.length + ' item(s) to Trash?\n' + names)) return;
+    try {
+        let success = 0;
+        for (const path of paths) {
+            const r = await apiFetch('/nas/api/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({path})
+            });
+            const d = await r.json();
+            if (d.success) success++;
+        }
+        checks.forEach(c => c.checked = false);
+        toggleBatch();
+        refresh();
+    } catch (e) {
+        alert('Delete error: ' + e.message);
     }
 }
 
