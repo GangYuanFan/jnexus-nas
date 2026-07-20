@@ -93,6 +93,12 @@
         .toolbar button:disabled { opacity: 0.2; cursor: default; }
         .toolbar input[type="text"] { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.4rem 0.8rem; border-radius: 10px; font-size: 13px; outline: none; min-width: 180px; }
         .toolbar input[type="text"]:focus { border-color: rgba(255,255,255,0.2); }
+        .toolbar-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.08); flex-shrink: 0; margin: 0 2px; }
+        #select-bar { display: none; align-items: center; gap: 8px; padding: 6px 14px; margin-bottom: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; font-size: 12px; }
+        #select-bar input[type="checkbox"] { accent-color: #00f2ff; width: 15px; height: 15px; cursor: pointer; }
+        #select-bar label { cursor: pointer; color: rgba(255,255,255,0.6); user-select: none; }
+        #select-bar label:hover { color: #fff; }
+        #select-count { margin-left: auto; color: rgba(255,255,255,0.35); }
         
         /* File Entry (List) */
         .file-entry { display: flex; align-items: center; padding: 0.5rem 1rem; border-radius: 10px; cursor: pointer; transition: all 0.15s; gap: 10px; font-size: 13px; }
@@ -411,24 +417,37 @@
             </div>
             
             <div class="toolbar">
+                <!-- Navigation -->
                 <button onclick="goUp()">⬆️ Up</button>
                 <button id="btn-back" onclick="goBack()">⬅️ Back</button>
                 <button id="btn-forward" onclick="goForward()">➡️ Fwd</button>
                 <button onclick="refresh()">🔄 Refresh</button>
+                
+                <span class="toolbar-sep"></span>
+                
+                <!-- Search & Sort -->
                 <input type="text" id="search-bar" placeholder="Search files..." oninput="handleSearch()">
                 <div class="flex items-center gap-1">
                     <button id="btn-sort-name" onclick="setSort('name')" class="bg-white/15 border border-white/20 text-white text-xs rounded-lg px-2 py-1 font-semibold">🔡 Name</button>
                     <button id="btn-sort-date" onclick="setSort('date')" class="bg-white/5 border border-white/10 text-white/60 text-xs rounded-lg px-2 py-1">🕒 Date</button>
                 </div>
+                
+                <span class="toolbar-sep"></span>
+                
+                <!-- File Actions -->
                 <button onclick="createFolder()">📁 New Folder</button>
                 <label>☁️ Upload<input type="file" multiple hidden onchange="handleUpload(this)"></label>
                 <button onclick="toggleGrid()">🔲 Toggle View</button>
                 <button id="btn-gallery" onclick="toggleGallery()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🖼️ Gallery</button>
+                
+                <span class="toolbar-sep"></span>
+                
+                <!-- Batch Actions (shown when items selected) -->
                 <button id="btn-batch-dl" onclick="batchDownload()" style="display:none;background:rgba(0,242,255,0.08);border-color:rgba(0,242,255,0.15);color:#00f2ff;">📦 Download (<span id="batch-count">0</span>)</button>
                 <button id="btn-batch-share" onclick="shareSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">🔗 Share (<span id="share-count">0</span>)</button>
-                <button id="btn-batch-delete" onclick="batchDelete()" style="display:none;background:rgba(255,50,50,0.12);border-color:rgba(255,50,50,0.2);color:#ff5252;">🗑️ Delete (<span id="delete-count">0</span>)</button>
                 <button id="btn-batch-cut" onclick="cutSelected()" style="display:none;background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.15);color:#ffc832;">✂️ Cut (<span id="cut-count">0</span>)</button>
                 <button id="btn-batch-copy" onclick="copySelected()" style="display:none;background:rgba(100,200,255,0.08);border-color:rgba(100,200,255,0.15);color:#7accff;">📋 Copy (<span id="copy-count">0</span>)</button>
+                <button id="btn-batch-delete" onclick="batchDelete()" style="display:none;background:rgba(255,50,50,0.12);border-color:rgba(255,50,50,0.2);color:#ff5252;">🗑️ Delete (<span id="delete-count">0</span>)</button>
                 <button id="btn-paste" onclick="pasteFiles()" style="display:none;background:rgba(100,200,100,0.08);border-color:rgba(100,200,100,0.15);color:#6dd6a0;">📌 Paste</button>
 
             <!-- Background Upload Status Banner -->
@@ -449,6 +468,13 @@
                     </div>
                 </div>
             </div>
+            </div>
+            
+            <!-- Select All Bar -->
+            <div id="select-bar">
+                <input type="checkbox" id="select-all-cb" onchange="toggleSelectAll()">
+                <label for="select-all-cb" id="select-all-label">Select All</label>
+                <span id="select-count"></span>
             </div>
             
             <div id="file-grid" class="file-grid">
@@ -1075,9 +1101,19 @@ function renderFiles(files) {
     if (!Array.isArray(files)) {
         const errMsg = (files && files.error) ? files.error : 'Error loading files';
         grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">' + errMsg + '</div>';
+        document.getElementById('select-bar').style.display='none';
         return;
     }
-    if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; return; }
+    if (!files.length) { grid.innerHTML = '<div style="text-align:center;padding:2rem;opacity:0.3">Empty directory</div>'; document.getElementById('select-bar').style.display='none'; return; }
+    
+    // Show select-bar when files are loaded (hide in gallery mode since no checkboxes)
+    const selectBar = document.getElementById('select-bar');
+    selectBar.style.display = isGallery ? 'none' : 'flex';
+    if (!isGallery) {
+        document.getElementById('select-all-cb').checked = false;
+        document.getElementById('select-all-cb').indeterminate = false;
+        document.getElementById('select-count').textContent = '';
+    }
     
     // Gallery mode: show only images in a photo grid
     if (isGallery) {
@@ -2182,6 +2218,15 @@ function formatSize(bytes) {
     return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
 }
 
+// ====== SELECT ALL ======
+
+function toggleSelectAll() {
+    const cb = document.getElementById('select-all-cb');
+    const checks = document.querySelectorAll('.file-check');
+    checks.forEach(c => c.checked = cb.checked);
+    toggleBatch();
+}
+
 // ====== BATCH DOWNLOAD ======
 
 function toggleBatch() {
@@ -2215,6 +2260,17 @@ function toggleBatch() {
         copyBtn.style.display = 'none';
     }
     updatePasteBtn();
+    
+    // Sync select-all checkbox state
+    const selectAllCb = document.getElementById('select-all-cb');
+    const allChecks = document.querySelectorAll('.file-check');
+    const checkedCount = document.querySelectorAll('.file-check:checked').length;
+    const countEl = document.getElementById('select-count');
+    if (allChecks.length > 0) {
+        selectAllCb.checked = (checkedCount === allChecks.length);
+        selectAllCb.indeterminate = (checkedCount > 0 && checkedCount < allChecks.length);
+    }
+    countEl.textContent = checkedCount > 0 ? checkedCount + ' selected' : '';
 }
 
 async function batchDownload() {
