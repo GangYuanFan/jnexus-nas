@@ -43,9 +43,12 @@ if not NAS_PASSWORD:
     NAS_PASSWORD = 'JERRY_NEXUS_2026'
 
 def init_app(root, password, port):
-    global ROOT_DIR, NAS_PASSWORD
+    global ROOT_DIR, NAS_PASSWORD, TRASH_DIR, TRASH_META_FILE, UPLOAD_TEMP_DIR
     ROOT_DIR = os.path.abspath(root)
     NAS_PASSWORD = password
+    TRASH_DIR = os.path.join(ROOT_DIR, '.trash')
+    TRASH_META_FILE = os.path.join(TRASH_DIR, '.trash_meta.json')
+    UPLOAD_TEMP_DIR = os.path.join(ROOT_DIR, '.nas_uploads')
     logger.info(f'NAS App initialized with absolute root={ROOT_DIR}, port={port}')
 
 
