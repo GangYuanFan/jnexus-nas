@@ -100,3 +100,19 @@
 
 ### ⚠️ Known Issues
 - None at this time.
+
+## v1.5.0 (2026-07-22) — Uiverse Galaxy UI Refresh
+
+### ✨ New UI Components (from [Uiverse Galaxy](https://github.com/uiverse-io/galaxy))
+- **Toast Notification System** — 17+ operation feedback points replaced `alert()` with elegant slide-in toasts (success/error/info/warning)
+- **Dynamic Auth Background** — Animated grid pattern with dual-color glow effect on login page
+- **WebDAV Toggle Switch** — Replaced clunky Start/Stop buttons with a smooth Uiverse-style toggle
+- **Dual-ring Loading Spinner** — Fancier CSS-only spinner with counter-rotating rings
+
+### 🐛 Bugfixes
+- Fixed `checkAuth()` missing `initCharts()` call on manual login (CPU/Memory graphs were blank)
+- Fixed `::before`/`::after` pseudo-elements covering auth form (added `pointer-events: none`)
+
+### 🔧 Version
+- Bumped to 1.5.0
+- Release date: 2026-07-22

@@ -295,16 +295,113 @@
         #monaco-box { flex: 1; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); }
         
         .loading { display: flex; justify-content: center; padding: 3rem; }
-        .spinner { width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.06); border-top-color: rgba(255,255,255,0.5); border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        /* ✨ Uiverse Galaxy - AHMED-MIT inspired dual-ring spinner */
+        .spinner {
+          width: 28px;
+          height: 28px;
+          display: grid;
+          border: 3px solid rgba(255,255,255,0.06);
+          border-top-color: #4f8;
+          border-right-color: #0af;
+          border-radius: 50%;
+          animation: uiverse-spin 1s infinite linear;
+        }
+        .spinner::before,
+        .spinner::after {
+          content: "";
+          grid-area: 1/1;
+          margin: 3px;
+          border: inherit;
+          border-radius: 50%;
+        }
+        .spinner::before {
+          border-color: #0af rgba(255,255,255,0.06);
+          animation: inherit;
+          animation-duration: 0.5s;
+          animation-direction: reverse;
+        }
+        .spinner::after { margin: 6px; }
+        @keyframes uiverse-spin { to { transform: rotate(1turn); } }
+        
+        /* ✨ Uiverse Galaxy - Toast Notification System */
+        #toast-container {
+          position: fixed;
+          top: 1rem;
+          right: 1rem;
+          z-index: 99999;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          pointer-events: none;
+        }
+        .toast {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(18,18,30,0.92);
+          backdrop-filter: blur(16px);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 14px;
+          padding: 0.8rem 1.2rem;
+          min-width: 240px;
+          max-width: 380px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03);
+          pointer-events: auto;
+          animation: toast-in 0.35s cubic-bezier(0.21, 1.02, 0.73, 1);
+          transition: all 0.3s ease;
+          font-size: 13px;
+          color: #e0e0e0;
+        }
+        .toast .toast-icon { font-size: 18px; flex-shrink: 0; }
+        .toast .toast-msg { flex: 1; line-height: 1.4; }
+        .toast.toast-success { border-left: 3px solid #4f8; }
+        .toast.toast-error { border-left: 3px solid #ff5252; }
+        .toast.toast-info { border-left: 3px solid #0af; }
+        .toast.toast-warning { border-left: 3px solid #ffc832; }
+        .toast.toast-exit { animation: toast-out 0.3s ease forwards; }
+        @keyframes toast-in {
+          from { transform: translateX(120%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toast-out {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(120%); opacity: 0; }
+        }
+        
+        /* ✨ Uiverse Galaxy - Auth page animated background pattern */
+        #auth-overlay::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(rgba(15,255,136,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15,255,136,0.03) 1px, transparent 1px);
+          background-size: 50px 50px;
+          animation: auth-grid-shift 20s linear infinite;
+        }
+        @keyframes auth-grid-shift {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(50px, 50px); }
+        }
+        #auth-overlay::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background: radial-gradient(ellipse at 30% 50%, rgba(0,170,255,0.06) 0%, transparent 60%),
+                      radial-gradient(ellipse at 70% 50%, rgba(79,255,136,0.06) 0%, transparent 60%);
+        }
         
         #auth-overlay { position: fixed; inset: 0; z-index: 999; background: #0a0a0f; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s; }
-        .auth-box { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 2.5rem; max-width: 340px; width: 100%; text-align: center; }
+        .auth-box { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 2.5rem; max-width: 340px; width: 100%; text-align: center; position: relative; z-index: 1; }
         .auth-box h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 6px; }
         .auth-box p { font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 1.5rem; }
         .auth-box input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.7rem; border-radius: 12px; outline: none; text-align: center; margin-bottom: 1rem; font-size: 14px; }
         .auth-box input:focus { border-color: rgba(255,255,255,0.2); }
-        .auth-box button { width: 100%; background: #fff; color: #000; border: none; padding: 0.7rem; border-radius: 12px; font-weight: 600; cursor: pointer; }
+        .auth-box button { width: 100%; background: #fff; color: #000; border: none; padding: 0.7rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25,0.8,0.25,1); position: relative; overflow: hidden; }
+        .auth-box button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(79,255,136,0.2); }
+        .auth-box button:active { transform: scale(0.97); }
         .auth-box .err { color: #ff5050; font-size: 12px; margin-top: 0.5rem; opacity: 0; transition: opacity 0.3s; }
         
         #sidebar-toggle, #sidebar-close { display: none; }
@@ -322,6 +419,43 @@
             #close-media { top: calc(1.5rem + env(safe-area-inset-top)) !important; }
         }
             #sidebar-close { display: flex; position: absolute; top: 0.6rem; right: 0.6rem; background: rgba(255,255,255,0.04); border: none; color: #fff; padding: 0.4rem 0.7rem; border-radius: 10px; cursor: pointer; font-size: 18px; }
+        }
+
+        /* ✨ Uiverse Galaxy - Toggle Switch (AbanoubMagdy1 inspired) */
+        .uiverse-toggle {
+          font-size: 17px;
+          position: relative;
+          display: inline-block;
+          width: 3em;
+          height: 1.7em;
+        }
+        .uiverse-toggle input { opacity: 0; width: 0; height: 0; }
+        .uiverse-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background-color: rgba(255,255,255,0.1);
+          transition: .4s;
+          border-radius: 30px;
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .uiverse-slider:before {
+          position: absolute;
+          content: "";
+          height: 1.2em;
+          width: 1.2em;
+          border-radius: 50%;
+          left: 0.2em;
+          bottom: 0.2em;
+          background-color: white;
+          transition: .3s cubic-bezier(0,2.18,.64,.69);
+        }
+        .uiverse-toggle input:checked + .uiverse-slider {
+          background-color: #4ade80;
+          border-color: #4ade80;
+        }
+        .uiverse-toggle input:checked + .uiverse-slider:before {
+          transform: translateX(1.3em);
         }
     </style>
     
@@ -342,6 +476,9 @@
         </form>
     </div>
 </div>
+
+<!-- ✨ Uiverse Galaxy - Toast Notification Container -->
+<div id="toast-container"></div>
 
 <div id="app" style="display:none">
         <!-- Sidebar -->
@@ -769,6 +906,7 @@ function checkAuth() {
                 setTimeout(() => {
                     document.getElementById('auth-overlay').style.display = 'none';
                     document.getElementById('app').style.display = 'flex';
+                    initCharts();
                     loadFiles('', true);
                     loadDashboard();
                 }, 400);
@@ -811,6 +949,21 @@ document.addEventListener('click', function(e) {
         closeCtxMenu();
     }
 });
+
+// ✨ Uiverse Galaxy - Toast Notification System
+function showToast(message, type = 'info', duration = 3500) {
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.innerHTML = '<span class="toast-icon">' + (icons[type] || 'ℹ️') + '</span><span class="toast-msg">' + message + '</span>';
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('toast-exit');
+        setTimeout(() => toast.remove(), 350);
+    }, duration);
+}
 
 function initCharts() {
     const chartConfig = (label, color) => ({
@@ -975,14 +1128,26 @@ async function loadSystemInfo() {
             const wd = await wdr.json();
             const wc = document.getElementById('webdav-card');
             if (wd.running) {
-                wc.innerHTML = '<div class="label">Status</div><div class="value" style="color:#4ade80">🟢 Running</div>' +
+                wc.innerHTML = '<div class="label">Status</div>' +
+                    '<div style="display:flex;align-items:center;gap:12px;margin:10px 0">' +
+                      '<label class="uiverse-toggle" style="flex-shrink:0">' +
+                        '<input type="checkbox" checked onchange="if(!this.checked)stopWebDAV();else startWebDAV();">' +
+                        '<span class="uiverse-slider"></span>' +
+                      '</label>' +
+                      '<span style="color:#4ade80;font-weight:600;font-size:14px">🟢 Running</span>' +
+                    '</div>' +
                     '<div class="sub" style="margin-top:8px">URL: <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;font-size:13px">' + escapeHtml(wd.dav_url) + '</code></div>' +
                     '<div class="sub">Username: <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px">' + escapeHtml(wd.username) + '</code></div>' +
-                    '<div class="sub">Password: Your NAS password</div>' +
-                    '<button onclick="stopWebDAV()" style="margin-top:10px;background:rgba(255,50,50,0.1);border:1px solid rgba(255,50,50,0.15);color:#ff5252;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">🛑 Stop WebDAV</button>';
+                    '<div class="sub">Password: Your NAS password</div>';
             } else {
-                wc.innerHTML = '<div class="label">Status</div><div class="value" style="color:rgba(255,255,255,0.3)">⚫ Stopped</div>' +
-                    '<button onclick="startWebDAV()" style="margin-top:10px;background:rgba(0,242,255,0.1);border:1px solid rgba(0,242,255,0.15);color:#00f2ff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">▶️ Start WebDAV</button>';
+                wc.innerHTML = '<div class="label">Status</div>' +
+                    '<div style="display:flex;align-items:center;gap:12px;margin:10px 0">' +
+                      '<label class="uiverse-toggle" style="flex-shrink:0">' +
+                        '<input type="checkbox" onchange="if(this.checked)startWebDAV();else stopWebDAV();">' +
+                        '<span class="uiverse-slider"></span>' +
+                      '</label>' +
+                      '<span style="color:rgba(255,255,255,0.3);font-weight:600;font-size:14px">⚫ Stopped</span>' +
+                    '</div>';
             }
         } catch(e) {
             const wc = document.getElementById('webdav-card');
@@ -996,18 +1161,18 @@ async function startWebDAV() {
     try {
         const r = await apiFetch('/nas/api/webdav/start', {method:'POST', headers:{'Content-Type':'application/json'}});
         const d = await r.json();
-        if (d.success) loadSystemInfo();
-        else alert('Failed to start WebDAV');
-    } catch(e) { alert(e.message); }
+        if (d.success) { loadSystemInfo(); showToast('WebDAV started', 'success'); }
+        else showToast('Failed to start WebDAV: ' + (d.error || ''), 'error');
+    } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function stopWebDAV() {
     try {
         const r = await apiFetch('/nas/api/webdav/stop', {method:'POST', headers:{'Content-Type':'application/json'}});
         const d = await r.json();
-        if (d.success) loadSystemInfo();
-        else alert('Failed to stop WebDAV');
-    } catch(e) { alert(e.message); }
+        if (d.success) { loadSystemInfo(); showToast('WebDAV stopped', 'info'); }
+        else showToast('Failed to stop WebDAV: ' + (d.error || ''), 'error');
+    } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function loadFiles(path, pushHist = true) {
@@ -1700,8 +1865,8 @@ async function saveFile() {
     try {
         const r = await apiFetch('/nas/api/save', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentEditingPath, content}) });
         const d = await r.json();
-        if (d.success) { alert('Saved!'); closeEditor(); }
-    } catch(e) { alert('Error: ' + e.message); }
+        if (d.success) { showToast('File saved ✅', 'success'); closeEditor(); }
+    } catch(e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 // ====== DOCUMENT VIEWER CARD FUNCTIONS ======
@@ -2085,12 +2250,12 @@ async function saveDocCard() {
         });
         const d = await r.json();
         if (d.success) {
-            alert('✅ Saved!');
+            showToast('Document saved ✅', 'success');
         } else {
-            alert('❌ Error: ' + (d.error || 'Unknown'));
+            showToast('Error: ' + (d.error || 'Unknown'), 'error');
         }
     } catch(e) {
-        alert('❌ Error: ' + e.message);
+        showToast('Error: ' + e.message, 'error');
     }
 }
 
@@ -2192,10 +2357,10 @@ async function createShare() {
                 document.getElementById('share-url-note').style.display = 'none';
             }
         } else {
-            alert('Failed: ' + (data.error || 'unknown'));
+            showToast('Failed: ' + (data.error || 'unknown'), 'error');
         }
     } catch (e) {
-        alert('Error: ' + e.message);
+        showToast('Error: ' + e.message, 'error');
     }
 }
 
@@ -2203,7 +2368,7 @@ function copyShareUrl() {
     const input = document.getElementById('share-url');
     input.select();
     document.execCommand('copy');
-    alert('📋 Copied to clipboard!');
+    showToast('Copied to clipboard 📋', 'success');
 }
 
 function formatSize(bytes) {
@@ -2294,7 +2459,7 @@ async function batchDownload() {
         });
         if (!resp.ok) {
             const err = await resp.json();
-            alert('Download failed: ' + (err.error || resp.statusText));
+            showToast('Download failed: ' + (err.error || resp.statusText), 'error');
             return;
         }
         // Download the blob
@@ -2707,6 +2872,7 @@ if (navigator.serviceWorker) {
         break;
       case 'upload_complete':
         console.log(`Upload complete: ${msg.filename}`);
+        showToast(`Uploaded: ${msg.filename} ✅`, 'success', 3000);
         break;
       case 'pending_list':
         console.log('Pending uploads:', msg.uploads);
