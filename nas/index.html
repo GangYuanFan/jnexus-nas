@@ -1242,8 +1242,9 @@ function renderBreadcrumb(path) {
     let cum = '';
     parts.forEach((p, i) => {
         cum += (i===0?'':'/') + p;
+        const targetPath = cum;
         const sp = document.createElement('span');
-        sp.className = 'bc-item'; sp.textContent = ' / ' + p; sp.onclick = () => loadFiles(cum);
+        sp.className = 'bc-item'; sp.textContent = ' / ' + p; sp.onclick = () => loadFiles(targetPath);
         el.appendChild(sp);
     });
 }
