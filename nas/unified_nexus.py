@@ -18,6 +18,7 @@ import glob
 import subprocess
 import shutil
 import uuid
+import hashlib
 from pathlib import Path
 from functools import wraps
 
@@ -58,6 +59,29 @@ TRASH_META_FILE = os.path.join(TRASH_DIR, '.trash_meta.json')
 
 # --- CHUNKED UPLOAD CONFIG ---
 UPLOAD_TEMP_DIR = os.path.join(ROOT_DIR, '.nas_uploads')
+
+# --- THUMBNAIL CACHE CONFIG ---
+THUMB_SIZE = 400
+CACHE_DIR = os.path.join(ROOT_DIR, '.nas_thumbnails')
+
+
+def _get_cached_thumbnail(full_path: str) -> bytes | None:
+    """Return cached thumbnail bytes if exists, else None"""
+    cache_key = hashlib.md5(full_path.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}_{THUMB_SIZE}.webp")
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            return f.read()
+    return None
+
+
+def _save_thumbnail_cache(full_path: str, img_bytes: bytes):
+    """Save bytes to thumbnail cache"""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_key = hashlib.md5(full_path.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}_{THUMB_SIZE}.webp")
+    with open(cache_path, 'wb') as f:
+        f.write(img_bytes)
 
 
 def cleanup_stale_uploads():
@@ -305,27 +329,118 @@ def save_file():
 @require_auth
 def list_files():
     path = request.args.get('path', '')
+    limit = request.args.get('limit', None, type=int)
+    cursor = request.args.get('cursor', None)
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     if not os.path.isdir(full_path): return jsonify({"error": "Path is not a directory"}), 400
     try:
-        files = []
-        for entry in os.scandir(full_path):
+        entries = list(os.scandir(full_path))
+
+        # Separate dirs and files, collect stats during scan
+        dirs = []
+        nondirs = []
+        for entry in entries:
             try:
                 st = entry.stat()
-                files.append({
-                    "name": entry.name, "is_dir": entry.is_dir(),
+                item = {
+                    "name": entry.name,
+                    "is_dir": entry.is_dir(),
                     "size": st.st_size if not entry.is_dir() else None,
                     "mtime": st.st_mtime
-                })
+                }
+                if entry.is_dir():
+                    dirs.append(item)
+                else:
+                    nondirs.append(item)
             except (FileNotFoundError, OSError):
-                # Skip broken symlinks or inaccessible entries
-                files.append({
-                    "name": entry.name, "is_dir": False,
-                    "size": 0, "mtime": 0
-                })
-        return jsonify(files)
+                item = {"name": entry.name, "is_dir": False, "size": 0, "mtime": 0}
+                nondirs.append(item)
+
+        # Sort by name (case-insensitive)
+        dirs.sort(key=lambda x: x["name"].lower())
+        nondirs.sort(key=lambda x: x["name"].lower())
+
+        # Dirs first, then files
+        all_sorted = dirs + nondirs
+
+        # Cursor-based pagination (only when limit is provided)
+        if limit is not None:
+            limit = min(limit, 200)
+            start_idx = 0
+            if cursor:
+                for i, item in enumerate(all_sorted):
+                    if item["name"] == cursor:
+                        start_idx = i + 1
+                        break
+            page = all_sorted[start_idx:start_idx + limit]
+            next_cursor = all_sorted[start_idx + limit]["name"] if (start_idx + limit) < len(all_sorted) else None
+            return jsonify({
+                "files": page,
+                "next_cursor": next_cursor,
+                "total": len(all_sorted)
+            })
+
+        # Backward compatible: no limit → return flat array
+        return jsonify(all_sorted)
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+@nas_bp.route('/api/media-list')
+@require_auth
+def media_list():
+    path = request.args.get('path', '')
+    limit = request.args.get('limit', 50, type=int)
+    cursor = request.args.get('cursor', None)
+    limit = min(limit, 200)
+    full_path = resolve_path(path)
+    if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
+    if not os.path.isdir(full_path): return jsonify({"error": "Not a directory"}), 400
+
+    IMG_EXTS_MEDIA = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+    VID_EXTS_MEDIA = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+
+    entries = []
+    for e in os.scandir(full_path):
+        if e.is_dir():
+            continue
+        ext = os.path.splitext(e.name)[1].lower()
+        if ext in IMG_EXTS_MEDIA or ext in VID_EXTS_MEDIA:
+            entries.append(e)
+
+    # Sort by name
+    entries.sort(key=lambda x: x.name.lower())
+
+    # Cursor filtering
+    start_idx = 0
+    if cursor:
+        for i, e in enumerate(entries):
+            if e.name == cursor:
+                start_idx = i + 1
+                break
+
+    page = entries[start_idx:start_idx + limit]
+    next_cursor = entries[start_idx + limit].name if (start_idx + limit) < len(entries) else None
+
+    result = []
+    for e in page:
+        try:
+            st = e.stat()
+            ext = os.path.splitext(e.name)[1].lower()
+            is_vid = ext in VID_EXTS_MEDIA
+            result.append({
+                "name": e.name,
+                "size": st.st_size,
+                "mtime": st.st_mtime,
+                "is_video": is_vid
+            })
+        except Exception:
+            result.append({"name": e.name, "size": 0, "mtime": 0, "is_video": False})
+
+    return jsonify({
+        "files": result,
+        "next_cursor": next_cursor,
+        "total": len(entries)
+    })
 
 @nas_bp.route('/api/mkdir', methods=['POST'])
 @require_auth
@@ -1609,16 +1724,24 @@ def get_thumbnail():
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR):
         return redirect('https://cdn-icons-png.flaticon.com/512/2961222.png', code=302)
-    
+
     ext = os.path.splitext(full_path)[1].lower()
-    
+
+    # 0. Check thumbnail cache first
+    cached = _get_cached_thumbnail(full_path)
+    if cached is not None:
+        resp = Response(cached, mimetype='image/webp')
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
+        return resp
+
+    from PIL import Image, ImageOps
+
     try:
-        # 1. Image Thumbnails (Pure Memory)
+        # 1. Image Thumbnails
         if ext in IMG_EXTS:
-            from PIL import Image, ImageOps
             img = Image.open(full_path)
             img = ImageOps.exif_transpose(img)
-            img.thumbnail((800, 800), Image.LANCZOS)
+            img = ImageOps.contain(img, (THUMB_SIZE, THUMB_SIZE), Image.LANCZOS)
             if img.mode in ('RGBA', 'LA', 'P'):
                 bg = Image.new('RGB', img.size, (30, 30, 40))
                 if img.mode == 'RGBA':
@@ -1626,27 +1749,41 @@ def get_thumbnail():
                 else:
                     bg.paste(img)
                 img = bg
-            
-            img_io = io.BytesIO()
-            img.save(img_io, 'JPEG', quality=90)
-            img_io.seek(0)
-            return send_file(img_io, mimetype='image/jpeg')
 
-        # 2. Video Thumbnails (Pure Memory via Pipe)
+            img_io = io.BytesIO()
+            img.save(img_io, 'WEBP', quality=85)
+            img_io.seek(0)
+            thumb_bytes = img_io.getvalue()
+            _save_thumbnail_cache(full_path, thumb_bytes)
+            resp = Response(thumb_bytes, mimetype='image/webp')
+            resp.headers['Cache-Control'] = 'public, max-age=86400'
+            return resp
+
+        # 2. Video Thumbnails
         if ext in VID_EXTS:
             import shutil
             ffmpeg_bin, si = _resolve_ffmpeg()
             for timestamp in ['00:00:01', '00:00:00']:
                 cmd = [
-                    ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp, 
-                    '-i', full_path, '-vframes', '1', '-f', 'image2pipe', 
-                    '-vcodec', 'mjpeg', '-vf', 'scale=600:-1', '-'
+                    ffmpeg_bin, '-loglevel', 'error', '-ss', timestamp,
+                    '-i', full_path, '-vframes', '1', '-f', 'image2pipe',
+                    '-vcodec', 'mjpeg', '-vf', f'scale={THUMB_SIZE}:-1', '-'
                 ]
                 try:
                     result = subprocess.run(cmd, capture_output=True, timeout=10,
                                             startupinfo=si)
                     if result.returncode == 0 and result.stdout:
-                        return Response(result.stdout, mimetype='image/jpeg')
+                        # Read ffmpeg jpeg output via Pillow, resize, save WebP
+                        frame = Image.open(io.BytesIO(result.stdout))
+                        frame = ImageOps.contain(frame, (THUMB_SIZE, THUMB_SIZE), Image.LANCZOS)
+                        out_io = io.BytesIO()
+                        frame.save(out_io, 'WEBP', quality=85)
+                        out_io.seek(0)
+                        thumb_bytes = out_io.getvalue()
+                        _save_thumbnail_cache(full_path, thumb_bytes)
+                        resp = Response(thumb_bytes, mimetype='image/webp')
+                        resp.headers['Cache-Control'] = 'public, max-age=86400'
+                        return resp
                 except Exception as ve:
                     err_detail = str(ve)
                     if result and hasattr(result, 'stderr') and result.stderr:
@@ -1655,7 +1792,6 @@ def get_thumbnail():
 
     except Exception as e:
         logger.error(f"General thumb error: {e}")
-        pass
 
     # 3. Special Document Icons
     icon_paths = {
