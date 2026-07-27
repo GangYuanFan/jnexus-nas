@@ -820,6 +820,9 @@
 
 
 <script>let currentPath = '', sortMode = 'name', sortAsc = true, histStack = [], histIdx = -1, allFiles = [], editor = null, ctxTarget = null, isGrid = false, isGallery = false, currentEditingPath = '', activeMedia = null;
+let mediaPages = { items: [], nextCursor: null, loading: false, hasMore: true };
+let galleryObserver = null;
+let galleryLoadObserver = null;
 let clipboardPaths = [], clipboardOp = ''; // 'cut' or 'copy'
 let cpuChart, memChart; // Chart instances
 
@@ -1226,8 +1229,17 @@ async function loadFiles(path, pushHist = true) {
             const hasMedia = allFiles.some(f => mediaExts.includes(f.name.split('.').pop().toLowerCase()) && !f.is_dir);
             galBtn.style.display = hasMedia ? '' : 'none';
         }
-        if (isGallery) galBtn.textContent = '📋 List';
-        renderFiles(allFiles);
+        if (isGallery) {
+            if (galBtn) galBtn.textContent = '📋 List';
+            // Gallery mode: reload via paginated media-list API
+            const grid = document.getElementById('file-grid');
+            grid.className = 'gallery-grid';
+            grid.innerHTML = '';
+            mediaPages = { items: [], nextCursor: null, loading: false, hasMore: true };
+            loadMediaPage(path, 50);
+        } else {
+            renderFiles(allFiles);
+        }
     } catch(e) { grid.innerHTML = '<div class="card" style="text-align:center;padding:2rem;opacity:0.5">Error loading files</div>'; }
 }
 
@@ -1255,10 +1267,10 @@ function getFileIcon(n, d, fp) {
     var e = n.split('.').pop().toLowerCase();
     var imgE = ['jpg','jpeg','png','gif','webp','svg'], vidE = ['mp4','mov','avi','mkv','webm'], offE = ['doc','docx','xls','xlsx','ppt','pptx'];
     if (imgE.indexOf(e) !== -1 || vidE.indexOf(e) !== -1 || offE.indexOf(e) !== -1) {
-        if (fp) return '/nas/api/thumbnail?path=' + encodeURIComponent(fp) + '&t=' + Date.now() + '&nocache=1';
+        if (fp) return '/nas/api/thumbnail?path=' + encodeURIComponent(fp);
         return 'https://cdn-icons-png.flaticon.com/512/337/337943.png';
     }
-    var m = {py:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg',js:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/javascript/javascript-original.svg',html:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/html5/html5-original.svg',css:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/css3/css3-original.svg',pdf:'https://cdn-icons-png.flaticon.com/512/337/337946.png',doc:window.location.origin+'/nas/api/thumbnail?path=nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png&t='+Date.now(),docx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png&t='+Date.now(),xls:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png&t='+Date.now(),xlsx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png&t='+Date.now(),ppt:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png&t='+Date.now(),pptx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png&t='+Date.now()};
+    var m = {py:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg',js:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/javascript/javascript-original.svg',html:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/html5/html5-original.svg',css:'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/css3/css3-original.svg',pdf:'https://cdn-icons-png.flaticon.com/512/337/337946.png',doc:window.location.origin+'/nas/api/thumbnail?path=nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png',docx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/word---67ab8593-d97f-4d34-bea6-25bc16087a34.png',xls:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png',xlsx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---fbd73b10-ff25-4e86-b0f0-ac7a0ae3d93c.png',ppt:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png',pptx:window.location.origin+'/nas/api/thumbnail?path=nas/icons/logo---0a771b7b-b41e-4235-bf90-003e8c46e5a6.png'};
     return m[e] || 'https://cdn-icons-png.flaticon.com/512/2961/2961222.png';
 }
 
@@ -1281,44 +1293,9 @@ function renderFiles(files) {
         document.getElementById('select-count').textContent = '';
     }
     
-    // Gallery mode: show only images in a photo grid
+    // Gallery mode is now managed by toggleGallery() + loadMediaPage() — early return
     if (isGallery) {
-        const imgExts = ['jpg','jpeg','png','gif','webp'];
-        const vidExts = ['mp4','mov','avi','mkv','webm'];
-        const mediaExts = [...imgExts, ...vidExts];
-        const media = files.filter(f => {
-            const ext = f.name.split('.').pop().toLowerCase();
-            return mediaExts.includes(ext) && !f.is_dir;
-        });
-        if (media.length === 0) {
-            isGallery = false;
-            document.getElementById('btn-gallery').textContent = '🖼️ Gallery';
-        } else {
-            grid.className = 'gallery-grid';
-            grid.innerHTML = '';
-            for (const f of media) {
-                const fpath = currentPath ? currentPath + '/' + f.name : f.name;
-                const encPath = encodeURIComponent(fpath);
-                const ext = f.name.split('.').pop().toLowerCase();
-                const isVid = vidExts.includes(ext);
-                const thumbUrl = '/nas/api/thumbnail?path=' + encPath + '&t=' + Date.now();
-                const item = document.createElement('div');
-                item.className = 'gallery-item';
-                item.innerHTML = `<img src="${thumbUrl}" alt="${f.name}" loading="lazy">${isVid ? '<div class="gallery-play-icon">▶</div>' : ''}<div class="gallery-caption">${f.name}</div>`;
-                item.onclick = (e) => {
-                    const fullPath = currentPath ? currentPath + '/' + f.name : f.name;
-                    openMediaPlayer(fullPath, isVid ? 'video' : 'image');
-                };
-                // Gallery items: long press for context menu
-                item.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    const encPath = encodeURIComponent(currentPath ? currentPath + '/' + f.name : f.name);
-                    showCtx(e, f.name, encPath, false, f.mtime || 0);
-                });
-                grid.appendChild(item);
-            }
-            return;
-        }
+        return;
     }
     
     grid.className = 'file-grid' + (isGrid ? ' grid' : '');
@@ -1431,6 +1408,15 @@ function ctxAction(action) {
 
 function handleSearch() {
     const q = document.getElementById('search-bar').value.toLowerCase();
+    // If in gallery mode, switch to list view for search results
+    if (isGallery) {
+        isGallery = false;
+        const btn = document.getElementById('btn-gallery');
+        if (btn) btn.textContent = '🖼️ Gallery';
+        const grid = document.getElementById('file-grid');
+        grid.className = 'file-grid' + (isGrid ? ' grid' : '');
+        document.getElementById('select-bar').style.display = 'flex';
+    }
     renderFiles(allFiles.filter(f => f.name.toLowerCase().includes(q)));
 }
 
@@ -1466,7 +1452,137 @@ function toggleGallery() {
     isGrid = false;
     const btn = document.getElementById('btn-gallery');
     btn.textContent = isGallery ? '📋 List' : '🖼️ Gallery';
-    renderFiles(allFiles);
+    
+    if (isGallery) {
+        // Enter gallery: load via paginated media-list API
+        const grid = document.getElementById('file-grid');
+        grid.className = 'gallery-grid';
+        grid.innerHTML = '';
+        mediaPages = { items: [], nextCursor: null, loading: false, hasMore: true };
+        loadMediaPage(currentPath, 50);
+    } else {
+        // Exit gallery: fallback to list view with already-loaded files
+        renderFiles(allFiles);
+    }
+}
+
+// ── Gallery Lazy Loading with Pagination ──────────────────────
+// IntersectionObserver for lazy-loading thumbnails
+function initGalleryObserver() {
+    if (!galleryObserver) {
+        galleryObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    const thumbUrl = img.dataset.thumb;
+                    if (thumbUrl) {
+                        img.src = thumbUrl;
+                        img.dataset.thumb = '';  // prevent re-load
+                    }
+                    galleryObserver.unobserve(img);
+                }
+            });
+        }, { rootMargin: '200px' });
+    }
+    return galleryObserver;
+}
+
+function observeGalleryItem(imgEl) {
+    initGalleryObserver().observe(imgEl);
+}
+
+function appendGalleryItem(file, index) {
+    const grid = document.getElementById('file-grid');
+    const fpath = currentPath ? currentPath + '/' + file.name : file.name;
+    const encPath = encodeURIComponent(fpath);
+    const ext = file.name.split('.').pop().toLowerCase();
+    const vidExts = ['mp4','mov','avi','mkv','webm'];
+    const isVid = vidExts.includes(ext);
+    
+    // Thumbnail URL — no cache-busting (backend returns Cache-Control: max-age=86400)
+    const thumbUrl = '/nas/api/thumbnail?path=' + encPath + '&password=' + encodeURIComponent(userPassword);
+    
+    const item = document.createElement('div');
+    item.className = 'gallery-item';
+    // Placeholder SVG until IntersectionObserver loads the real thumbnail
+    item.innerHTML = '<img data-thumb="' + thumbUrl + '" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%23222230\' width=\'200\' height=\'200\'/%3E%3C/svg%3E" alt="' + file.name.replace(/"/g, '&quot;') + '" style="background:rgba(255,255,255,0.03);">' + (isVid ? '<div class="gallery-play-icon">▶</div>' : '') + '<div class="gallery-caption">' + file.name + '</div>';
+    
+    item.onclick = () => {
+        const fullPath = currentPath ? currentPath + '/' + file.name : file.name;
+        openMediaPlayer(fullPath, isVid ? 'video' : 'image');
+    };
+    
+    item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const encPath = encodeURIComponent(currentPath ? currentPath + '/' + file.name : file.name);
+        showCtx(e, file.name, encPath, false, file.mtime || 0);
+    });
+    
+    grid.appendChild(item);
+    
+    // Register IntersectionObserver for lazy loading
+    const img = item.querySelector('img');
+    if (img) observeGalleryItem(img);
+}
+
+function maybeLoadNextPage() {
+    // Find or create sentinel element at bottom of gallery
+    let sentinel = document.getElementById('gallery-sentinel');
+    if (!sentinel && mediaPages.hasMore) {
+        sentinel = document.createElement('div');
+        sentinel.id = 'gallery-sentinel';
+        sentinel.style.height = '1px';
+        document.getElementById('file-grid').appendChild(sentinel);
+    }
+    
+    // Observe sentinel with IntersectionObserver for infinite scroll
+    if (sentinel && !sentinel._observer) {
+        galleryLoadObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && mediaPages.hasMore && !mediaPages.loading) {
+                loadMediaPage(currentPath);
+            }
+        }, { rootMargin: '400px' });
+        galleryLoadObserver.observe(sentinel);
+        sentinel._observer = true;
+    }
+}
+
+async function loadMediaPage(path, limit = 50) {
+    if (mediaPages.loading || !mediaPages.hasMore) return;
+    mediaPages.loading = true;
+    
+    let url = '/nas/api/media-list?path=' + encodeURIComponent(path) + '&limit=' + limit + '&password=' + encodeURIComponent(userPassword);
+    if (mediaPages.nextCursor) {
+        url += '&cursor=' + encodeURIComponent(mediaPages.nextCursor);
+    }
+    
+    try {
+        const r = await fetch(url);
+        const data = await r.json();
+        
+        // Append new media items
+        const startIdx = mediaPages.items.length;
+        data.files.forEach((f, i) => {
+            mediaPages.items.push(f);
+            appendGalleryItem(f, startIdx + i);
+        });
+        
+        mediaPages.nextCursor = data.next_cursor || null;
+        mediaPages.hasMore = mediaPages.nextCursor !== null;
+        mediaPages.loading = false;
+        
+        // Setup infinite scroll if more pages
+        if (mediaPages.hasMore) {
+            maybeLoadNextPage();
+        } else {
+            // Remove sentinel if no more pages
+            const sent = document.getElementById('gallery-sentinel');
+            if (sent) sent.remove();
+        }
+    } catch (e) {
+        mediaPages.loading = false;
+        console.error('[NAS] loadMediaPage error:', e);
+    }
 }
 
 function hasImages(files) {
