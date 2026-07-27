@@ -4,6 +4,15 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
+# 1.6.0 (2026-07-27) - Thumbnail Cache + Gallery Lazy Loading
+# - New: Thumbnail cache layer (.nas_thumbnails/) — WebP 400px with MD5 hash keys
+# - New: Cursor-based pagination on /nas/api/files (?limit=&cursor=)
+# - New: /nas/api/media-list endpoint for gallery (filters images/videos only)
+# - New: IntersectionObserver lazy loading for gallery thumbnails
+# - New: Infinite scroll in gallery mode (50 items per page)
+# - Perf: Cache-Control: public, max-age=86400 on thumbnails
+# - Perf: Removed cache-busting (?t=Date.now()&nocache=1) from all thumbnail URLs
+#
 # 1.3.0 (2026-07-19) - Cut/Copy/Paste, Batch Delete, File Dates
 # - New: Batch delete button — multi-select files → move to Trash
 # - New: Cut/Copy/Paste — multi-file clipboard with overwrite support

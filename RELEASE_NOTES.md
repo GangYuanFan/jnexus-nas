@@ -1,5 +1,19 @@
 # J.NAS Release Notes
 
+## v1.6.0 (2026-07-27) — Thumbnail Cache + Gallery Lazy Loading 🚀
+
+### ⚡ Performance Overhaul
+- **Thumbnail Cache Layer**: `.nas_thumbnails/` — MD5-hash keyed, 400px WebP, lazy generation + disk cache
+- **Cursor Pagination**: `/nas/api/files?limit=&cursor=` — 游標分頁，向後相容（無 limit 回傳全部）
+- **Media-List API**: New `/nas/api/media-list` endpoint — 只回傳圖片+影片，減少傳輸量
+- **Gallery Lazy Loading**: IntersectionObserver — 只載入 viewport 內的縮圖，200px buffer
+- **Infinite Scroll**: Gallery 模式一次載 50 張，滾到底自動加載
+- **Browser Cache**: `Cache-Control: public, max-age=86400` — 瀏覽器快取 24h
+- **Removed Cache-Busting**: 刪除所有 `&t=Date.now()&nocache=1`，讓 CDN/瀏覽器正常快取
+
+### 📦 Build
+- Version bumped to 1.6.0
+
 ## v1.2.2 (2026-07-16) — Bundled ffmpeg + No Black Window
 
 ### 🎬 ffmpeg Bundled into Build
