@@ -5,8 +5,8 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, Bluep
 from flask_cors import CORS
 from dotenv import load_dotenv
 # Version — defined here for direct script execution support
-__version__ = '1.6.0'
-RELEASE_DATE = '2026-07-27'
+__version__ = '1.7.0'
+RELEASE_DATE = '2026-07-29'
 import psutil
 import platform
 import time
@@ -64,6 +64,25 @@ UPLOAD_TEMP_DIR = os.path.join(ROOT_DIR, '.nas_uploads')
 THUMB_SIZE = 400
 CACHE_DIR = os.path.join(ROOT_DIR, '.nas_thumbnails')
 
+# --- ASYNC COPY/MOVE JOB TRACKING ---
+_copy_jobs_lock = threading.Lock()
+_copy_jobs = {}  # job_id -> {status, type, total, done, current, errors, start_time, paths, dest}
+
+# --- DIRECTORY LISTING CACHE (TTL 10s) ---
+_dir_cache_lock = threading.Lock()
+_dir_cache = {}  # path -> {data, timestamp}
+_DIR_CACHE_TTL = 10  # seconds
+
+
+def _cleanup_stale_jobs():
+    """Remove completed/failed jobs older than 5 minutes."""
+    now = time.time()
+    with _copy_jobs_lock:
+        stale = [jid for jid, j in _copy_jobs.items()
+                 if j['status'] in ('completed', 'failed') and now - j.get('_end_time', now) > 300]
+        for jid in stale:
+            del _copy_jobs[jid]
+
 
 def _get_cached_thumbnail(full_path: str) -> bytes | None:
     """Return cached thumbnail bytes if exists, else None"""
@@ -118,6 +137,163 @@ def cleanup_stale_uploads():
                 logger.info(f'Cleaned stale upload: {upload_dir}')
             except Exception as e:
                 logger.warning(f'Failed to clean stale upload {upload_dir}: {e}')
+
+def _do_async_copy(job_id, paths, dest_full):
+    """Background thread: copy files using native cp -a for speed, track progress."""
+    with _copy_jobs_lock:
+        j = _copy_jobs.get(job_id)
+        if not j:
+            return
+        total_items = j['total_items']
+        j['status'] = 'running'
+        j['done'] = 0
+
+    done = 0
+    errors = []
+    for p in paths:
+        src_full = resolve_path(p)
+        if not src_full.startswith(ROOT_DIR):
+            errors.append(p + ': forbidden')
+            done += 1
+            with _copy_jobs_lock:
+                if job_id in _copy_jobs:
+                    _copy_jobs[job_id]['done'] = done
+                    _copy_jobs[job_id]['current'] = p
+            continue
+
+        dst = os.path.join(dest_full, os.path.basename(p))
+        try:
+            # Use native cp -a: preserves all metadata, much faster than shutil copy2/copytree
+            if os.path.exists(dst):
+                if os.path.isdir(dst):
+                    subprocess.run(['rm', '-rf', dst], check=True, capture_output=True)
+                else:
+                    os.remove(dst)
+            subprocess.run(['cp', '-a', src_full, dst], check=True, capture_output=True, timeout=300)
+            done += 1
+        except subprocess.CalledProcessError:
+            # Fallback: if cp fails (e.g., WSL interop issues), use shutil
+            try:
+                if os.path.isdir(src_full):
+                    shutil.copytree(src_full, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src_full, dst)
+                done += 1
+            except Exception as e2:
+                errors.append(f"{p}: {str(e2)}")
+                done += 1
+        except Exception as e:
+            errors.append(f"{p}: {str(e)}")
+            done += 1
+
+        with _copy_jobs_lock:
+            if job_id in _copy_jobs:
+                _copy_jobs[job_id]['done'] = done
+                _copy_jobs[job_id]['current'] = p
+
+    # Invalidate caches
+    _invalidate_dir_cache(dest_full)
+    for p in paths:
+        src_full = resolve_path(p)
+        _invalidate_dir_cache(os.path.dirname(src_full))
+
+    with _copy_jobs_lock:
+        if job_id in _copy_jobs:
+            _copy_jobs[job_id]['status'] = 'completed' if not errors or done > 0 else 'failed'
+            _copy_jobs[job_id]['done'] = done
+            _copy_jobs[job_id]['errors'] = errors
+            _copy_jobs[job_id]['_end_time'] = time.time()
+    _cleanup_stale_jobs()
+
+
+def _do_async_move(job_id, paths, dest_full):
+    """Background thread: move files using native mv for speed."""
+    with _copy_jobs_lock:
+        j = _copy_jobs.get(job_id)
+        if not j:
+            return
+        j['status'] = 'running'
+        j['done'] = 0
+        total_items = j['total_items']
+
+    done = 0
+    errors = []
+    for p in paths:
+        src_full = resolve_path(p)
+        if not src_full.startswith(ROOT_DIR):
+            errors.append(p + ': forbidden')
+            done += 1
+            with _copy_jobs_lock:
+                if job_id in _copy_jobs:
+                    _copy_jobs[job_id]['done'] = done
+                    _copy_jobs[job_id]['current'] = p
+            continue
+
+        dst = os.path.join(dest_full, os.path.basename(p))
+        try:
+            if os.path.exists(dst):
+                if os.path.isdir(dst):
+                    subprocess.run(['rm', '-rf', dst], check=True, capture_output=True)
+                else:
+                    os.remove(dst)
+            # Native mv: instant on same filesystem
+            subprocess.run(['mv', src_full, dest_full], check=True, capture_output=True, timeout=300)
+            done += 1
+        except subprocess.CalledProcessError:
+            # Fallback: if mv fails (cross-filesystem), use shutil.move
+            try:
+                shutil.move(src_full, dest_full)
+                done += 1
+            except Exception as e2:
+                errors.append(f"{p}: {str(e2)}")
+                done += 1
+        except Exception as e:
+            errors.append(f"{p}: {str(e)}")
+            done += 1
+
+        with _copy_jobs_lock:
+            if job_id in _copy_jobs:
+                _copy_jobs[job_id]['done'] = done
+                _copy_jobs[job_id]['current'] = p
+
+    # Invalidate caches
+    _invalidate_dir_cache(dest_full)
+    for p in paths:
+        src_full = resolve_path(p)
+        _invalidate_dir_cache(os.path.dirname(src_full))
+
+    with _copy_jobs_lock:
+        if job_id in _copy_jobs:
+            _copy_jobs[job_id]['status'] = 'completed' if not errors or done > 0 else 'failed'
+            _copy_jobs[job_id]['done'] = done
+            _copy_jobs[job_id]['errors'] = errors
+            _copy_jobs[job_id]['_end_time'] = time.time()
+    _cleanup_stale_jobs()
+
+
+def _invalidate_dir_cache(path):
+    """Invalidate directory listing cache for a path and its parent."""
+    with _dir_cache_lock:
+        _dir_cache.pop(path, None)
+        parent = os.path.dirname(path.rstrip('/'))
+        if parent:
+            _dir_cache.pop(parent, None)
+
+
+def _get_cached_listing(path):
+    """Get cached directory listing if fresh enough."""
+    with _dir_cache_lock:
+        entry = _dir_cache.get(path)
+        if entry and (time.time() - entry['timestamp']) < _DIR_CACHE_TTL:
+            return entry['data']
+    return None
+
+
+def _set_cached_listing(path, data):
+    """Cache a directory listing result."""
+    with _dir_cache_lock:
+        _dir_cache[path] = {'data': data, 'timestamp': time.time()}
+
 
 def get_trash_meta():
     """Load trash metadata JSON."""
@@ -334,24 +510,38 @@ def list_files():
     full_path = resolve_path(path)
     if not full_path.startswith(ROOT_DIR): return jsonify({"error": "Forbidden"}), 403
     if not os.path.isdir(full_path): return jsonify({"error": "Path is not a directory"}), 400
+
+    # Check cache first (10s TTL)
+    cached = _get_cached_listing(full_path)
+    if cached is not None and limit is None and cursor is None:
+        return jsonify(cached)
+
     try:
         entries = list(os.scandir(full_path))
 
-        # Separate dirs and files, collect stats during scan
+        # Separate dirs and files, use scandir's built-in is_dir (no extra stat)
         dirs = []
         nondirs = []
         for entry in entries:
             try:
-                st = entry.stat()
-                item = {
-                    "name": entry.name,
-                    "is_dir": entry.is_dir(),
-                    "size": st.st_size if not entry.is_dir() else None,
-                    "mtime": st.st_mtime
-                }
-                if entry.is_dir():
+                is_dir = entry.is_dir(follow_symlinks=False)
+                # Only stat for files (need size); dirs get size=None
+                if is_dir:
+                    item = {
+                        "name": entry.name,
+                        "is_dir": True,
+                        "size": None,
+                        "mtime": None
+                    }
                     dirs.append(item)
                 else:
+                    st = entry.stat()
+                    item = {
+                        "name": entry.name,
+                        "is_dir": False,
+                        "size": st.st_size,
+                        "mtime": st.st_mtime
+                    }
                     nondirs.append(item)
             except (FileNotFoundError, OSError):
                 item = {"name": entry.name, "is_dir": False, "size": 0, "mtime": 0}
@@ -380,6 +570,9 @@ def list_files():
                 "next_cursor": next_cursor,
                 "total": len(all_sorted)
             })
+
+        # Cache full listing (not paginated)
+        _set_cached_listing(full_path, all_sorted)
 
         # Backward compatible: no limit → return flat array
         return jsonify(all_sorted)
@@ -451,6 +644,7 @@ def make_dir():
     full_path = os.path.join(full_dir, data['name'])
     try:
         os.makedirs(full_path, exist_ok=True)
+        _invalidate_dir_cache(full_dir)
         return jsonify({"success": True})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
@@ -663,6 +857,7 @@ def upload_complete():
 
         # Clean up temp directory
         shutil.rmtree(upload_dir, ignore_errors=True)
+        _invalidate_dir_cache(full_dir)
 
         return jsonify({"success": True, "saved_path": full_path})
 
@@ -750,6 +945,7 @@ def delete_item():
             'size': os.path.getsize(trash_path) if os.path.isfile(trash_path) else None
         })
         save_trash_meta(meta)
+        _invalidate_dir_cache(os.path.dirname(full_path))
         
         return jsonify({"success": True, "trashed": trash_name})
     except Exception as e: return jsonify({"error": str(e)}), 500
@@ -906,13 +1102,29 @@ def rename_item():
     new_full = os.path.join(os.path.dirname(old_full), new_p)
     try:
         os.rename(old_full, new_full)
+        _invalidate_dir_cache(os.path.dirname(old_full))
         return jsonify({"success": True})
     except Exception as e: return jsonify({"error": str(e)}), 500
+
+def _count_items(paths):
+    """Count total top-level items in paths list."""
+    count = 0
+    for p in paths:
+        src_full = resolve_path(p)
+        if os.path.isdir(src_full):
+            count += sum(1 for _ in os.scandir(src_full)) if os.path.exists(src_full) else 0
+        else:
+            count += 1
+    return max(count, len(paths))
+
 
 @nas_bp.route('/api/copy', methods=['POST'])
 @require_auth
 def copy_item():
-    """Copy files from source paths to a destination directory."""
+    """Copy files from source paths to a destination directory.
+    Uses background thread + native cp -a for speed.
+    Returns job_id immediately for progress tracking.
+    """
     data = request.json
     paths = data.get('paths', [])
     dest = data.get('dest', '')  # '' = root
@@ -923,39 +1135,70 @@ def copy_item():
     dest_full = resolve_path(dest)
     if not dest_full.startswith(ROOT_DIR):
         return jsonify({"error": "Forbidden"}), 403
-    success = 0
-    errors = []
-    for p in paths:
+
+    # Single item, small size: sync copy (no job overhead)
+    total_size = 0
+    for p in paths[:5]:
         src_full = resolve_path(p)
-        if not src_full.startswith(ROOT_DIR):
-            errors.append(p + ': forbidden')
-            continue
-        if os.path.isdir(src_full):
+        if os.path.isfile(src_full):
+            try:
+                total_size += os.path.getsize(src_full)
+            except:
+                pass
+
+    # If small total (< 50MB or single file), do it sync for immediate result
+    small_op = len(paths) == 1 or total_size < 50 * 1024 * 1024
+
+    if small_op:
+        success = 0
+        errors = []
+        for p in paths:
+            src_full = resolve_path(p)
+            if not src_full.startswith(ROOT_DIR):
+                errors.append(p + ': forbidden')
+                continue
             dst = os.path.join(dest_full, os.path.basename(p))
             try:
-                # Remove destination if exists, then copy
                 if os.path.exists(dst):
-                    shutil.rmtree(dst, ignore_errors=True)
-                shutil.copytree(src_full, dst, dirs_exist_ok=True)
+                    if os.path.isdir(dst):
+                        shutil.rmtree(dst, ignore_errors=True)
+                    else:
+                        os.remove(dst)
+                # Sync path: use shutil for reliability (avoids WSL cp issues)
+                if os.path.isdir(src_full):
+                    shutil.copytree(src_full, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src_full, dst)
                 success += 1
             except Exception as e:
-                errors.append(p + ': ' + str(e))
-        else:
-            try:
-                dst_file = os.path.join(dest_full, os.path.basename(p))
-                # Remove destination if exists (overwrite)
-                if os.path.exists(dst_file):
-                    os.remove(dst_file)
-                shutil.copy2(src_full, dest_full)
-                success += 1
-            except Exception as e:
-                errors.append(p + ': ' + str(e))
-    return jsonify({"success": success, "errors": errors})
+                errors.append(f"{p}: {str(e)}")
+        _invalidate_dir_cache(dest_full)
+        return jsonify({"success": success, "errors": errors, "async": False})
+
+    # Large op: run async with progress tracking
+    total_items = _count_items(paths)
+    job_id = str(uuid.uuid4())
+    with _copy_jobs_lock:
+        _copy_jobs[job_id] = {
+            'type': 'copy',
+            'status': 'pending',
+            'total_items': total_items,
+            'done': 0,
+            'current': '',
+            'errors': [],
+            'start_time': time.time(),
+        }
+    thread = threading.Thread(target=_do_async_copy, args=(job_id, paths, dest_full), daemon=True)
+    thread.start()
+    logger.info(f'[COPY] Started async job {job_id}: {len(paths)} path(s), {total_items} total items')
+    return jsonify({"async": True, "job_id": job_id, "total": total_items})
 
 @nas_bp.route('/api/move', methods=['POST'])
 @require_auth
 def move_item():
-    """Move files from source paths to a destination directory (overwrites existing)."""
+    """Move files from source paths to a destination directory (overwrites existing).
+    Uses background thread for large moves with progress tracking.
+    """
     data = request.json
     paths = data.get('paths', [])
     dest = data.get('dest', '')  # '' = root
@@ -966,26 +1209,74 @@ def move_item():
     dest_full = resolve_path(dest)
     if not dest_full.startswith(ROOT_DIR):
         return jsonify({"error": "Forbidden"}), 403
-    success = 0
-    errors = []
-    for p in paths:
-        src_full = resolve_path(p)
-        if not src_full.startswith(ROOT_DIR):
-            errors.append(p + ': forbidden')
-            continue
-        try:
-            dst_path = os.path.join(dest_full, os.path.basename(p))
-            # Remove destination if exists (overwrite)
-            if os.path.exists(dst_path):
-                if os.path.isdir(dst_path):
-                    shutil.rmtree(dst_path, ignore_errors=True)
-                else:
-                    os.remove(dst_path)
-            shutil.move(src_full, dest_full)
-            success += 1
-        except Exception as e:
-            errors.append(p + ': ' + str(e))
-    return jsonify({"success": success, "errors": errors})
+
+    # Small op: sync for immediate feedback
+    if len(paths) <= 3:
+        success = 0
+        errors = []
+        for p in paths:
+            src_full = resolve_path(p)
+            if not src_full.startswith(ROOT_DIR):
+                errors.append('forbidden: ' + p)
+                continue
+            try:
+                dst_path = os.path.join(dest_full, os.path.basename(p))
+                if os.path.exists(dst_path):
+                    if os.path.isdir(dst_path):
+                        shutil.rmtree(dst_path, ignore_errors=True)
+                    else:
+                        os.remove(dst_path)
+                shutil.move(src_full, dest_full)
+                success += 1
+            except Exception as e:
+                errors.append(f"{p}: {str(e)}")
+        _invalidate_dir_cache(dest_full)
+        # Also invalidate source parent for cut
+        for p in paths:
+            src_full = resolve_path(p)
+            _invalidate_dir_cache(os.path.dirname(src_full))
+        return jsonify({"success": success, "errors": errors, "async": False})
+
+    # Large op: async
+    total_items = _count_items(paths)
+    job_id = str(uuid.uuid4())
+    with _copy_jobs_lock:
+        _copy_jobs[job_id] = {
+            'type': 'move',
+            'status': 'pending',
+            'total_items': total_items,
+            'done': 0,
+            'current': '',
+            'errors': [],
+            'start_time': time.time(),
+        }
+    thread = threading.Thread(target=_do_async_move, args=(job_id, paths, dest_full), daemon=True)
+    thread.start()
+    logger.info(f'[MOVE] Started async job {job_id}: {len(paths)} path(s)')
+    return jsonify({"async": True, "job_id": job_id, "total": total_items})
+
+
+@nas_bp.route('/api/copy-jobs', methods=['GET'])
+@require_auth
+def get_copy_jobs():
+    """List active and recent copy/move jobs."""
+    _cleanup_stale_jobs()
+    with _copy_jobs_lock:
+        running = {jid: j for jid, j in _copy_jobs.items() if j['status'] == 'running'}
+        recent = {jid: j for jid, j in _copy_jobs.items() if j['status'] != 'running'}
+    return jsonify({"jobs": {**running, **recent}})
+
+
+@nas_bp.route('/api/copy-jobs/<job_id>', methods=['GET'])
+@require_auth
+def get_copy_job(job_id):
+    """Get progress for a specific copy/move job."""
+    with _copy_jobs_lock:
+        j = _copy_jobs.get(job_id)
+    if not j:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(j)
+
 
 @nas_bp.route('/api/download')
 @require_auth
