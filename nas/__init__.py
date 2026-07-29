@@ -4,7 +4,7 @@ from .unified_nexus import __version__, RELEASE_DATE
 VERSION = __version__
 
 # CHANGELOG:
-# 1.6.0 (2026-07-27) - Thumbnail Cache + Gallery Lazy Loading
+# 1.7.0 (2026-07-29) - Async Copy Progress + Cache Speedup
 # - New: Thumbnail cache layer (.nas_thumbnails/) — WebP 400px with MD5 hash keys
 # - New: Cursor-based pagination on /nas/api/files (?limit=&cursor=)
 # - New: /nas/api/media-list endpoint for gallery (filters images/videos only)

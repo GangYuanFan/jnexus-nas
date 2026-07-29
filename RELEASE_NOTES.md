@@ -1,5 +1,25 @@
 # J.NAS Release Notes
 
+## v1.7.0 (2026-07-29) — Async Copy Progress + Cache Speedup 🚀
+
+### ✨ New Features
+- **Async Copy/Move Progress**: 非同步背景執行大檔案複製/搬移，前端右下角浮動進度條顯示
+- **Progress Bar Overlay**: 顯示完成 X/Y 個檔案 + 當前檔名，完成自動刷新
+- **Sync Path Reliability**: 小量操作使用 `shutil`（安全穩定），大量操作背景用 `cp -a` 加速
+- **`/api/copy-jobs` API**: 查詢進行中/最近完成的複製/搬移任務
+
+### ⚡ Performance
+- **Directory Cache**: 10s TTL 目錄快取，切換資料夾秒開
+- **Avoid Directory Stat**: `is_dir()` 不再對目錄做 `stat()`，減少 WSL 開銷
+- **Smart Cache Invalidation**: 複製、搬移、刪除、改名、上傳後自動清除相關快取
+- **`cp -a` Fallback**: 背景非同步優先使用原生 `cp -a`，失敗自動降級到 `shutil`
+
+### 🐛 Fixed
+- WSL 中文字路徑 `[WinError 2]` 問題：同步路徑退回 `shutil`，非同步有自動降級
+
+### 📦 Build
+- Version bumped to 1.7.0
+
 ## v1.6.0 (2026-07-27) — Thumbnail Cache + Gallery Lazy Loading 🚀
 
 ### ⚡ Performance Overhaul

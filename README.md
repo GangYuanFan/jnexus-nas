@@ -142,7 +142,7 @@ This will:
    ![GUI Window Layout]
    ```
    ┌───────────────────────────────────────┐
-   │  J.NAS Server Controller v1.6.0       │
+   │  J.NAS Server Controller v1.7.0       │
    ├───────────────────────────────────────┤
    │  Root Directory: [________________] Browse │
    │  NAS Password:   [________________]        │
